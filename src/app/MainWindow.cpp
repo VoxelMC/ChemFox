@@ -331,7 +331,7 @@ void MainWindow::buildMenus() {
     help->addAction("&About ChemFox", this, [this, repo] {
         QMessageBox::about(this, "About ChemFox",
                            QString("<h3>ChemFox %1</h3>"
-                                   "<p>A keyboard-first editor for chemical structures and reaction schemes.</p>"
+                                   "<p>An open-source graphical editor for chemical structures and reaction schemes.</p>"
                                    "<p>Apache License 2.0.%2</p>"
                                    "<p>Chemistry by <a href='https://www.rdkit.org'>RDKit</a>; interface by "
                                    "<a href='https://www.qt.io'>Qt</a> (LGPL v3). See Help → Third-Party Licences.</p>")
