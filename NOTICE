@@ -1,5 +1,5 @@
 ChemFox
-Copyright 2026 Trev and the ChemFox contributors
+Copyright 2026 Trevor Fox
 
 Licensed under the Apache License, Version 2.0 (see LICENSE).
 
@@ -8,14 +8,18 @@ Installed copies carry each package's licence text in the "licenses" folder
 (see licenses/THIRD-PARTY.txt for the full list). In particular:
 
 - RDKit: open-source cheminformatics (https://www.rdkit.org), BSD 3-Clause License.
-  Includes the IUPAC/InChI Trust InChI library (InChI Trust licence) and the
-  Schrödinger coordgen layout library (BSD 3-Clause).
+  It includes the InChI 1.06 library (IUPAC/InChI Trust, MIT License), Schrödinger's
+  coordgenlibs (BSD 3-Clause) and maeparser (MIT), RingDecomposerLib (BSD 3-Clause)
+  and Eigen (MPL 2.0, unmodified; source at https://gitlab.com/libeigen/eigen).
 - Qt 6 (https://www.qt.io), used under the GNU Lesser General Public License v3,
-  linked dynamically. The Qt source code is available from https://download.qt.io/
-  and from conda-forge (https://github.com/conda-forge/qt-main-feedstock). You may
-  replace the Qt libraries shipped with ChemFox with your own builds.
+  linked dynamically. You may replace the Qt libraries shipped with ChemFox with your
+  own builds. The source is conda-forge's qt6-main package
+  (https://github.com/conda-forge/qt-main-feedstock) and https://download.qt.io/.
 - Boost C++ Libraries (https://www.boost.org), Boost Software License 1.0.
-- FreeType, HarfBuzz, ICU, libpng, libjpeg-turbo, zlib, zstd, PCRE2 and other
-  libraries bundled with Qt, each under its own licence.
+- FreeType, used under the FreeType License (FTL): portions of this software are
+  copyright © The FreeType Project (www.freetype.org). All rights reserved.
+- This software is based in part on the work of the Independent JPEG Group.
+- ICU, libpng, libtiff, libwebp, zlib, zstd, PCRE2, OpenSSL and other libraries
+  bundled with Qt, each under its own licence.
 - The Microsoft Visual C++ runtime (Windows builds), redistributed under the
   Visual Studio redistribution terms.

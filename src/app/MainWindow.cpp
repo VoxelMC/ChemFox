@@ -4,6 +4,7 @@
 #include "app/ReactionBuilder.h"
 #include "app/Shortcuts.h"
 #include "app/StyleEditor.h"
+#include "app/Updates.h"
 
 #include "core/chem/Chem.h"
 #include "core/model/Labels.h"
@@ -38,6 +39,7 @@
 #include <QSettings>
 #include <QStatusBar>
 #include <QTextBrowser>
+#include <QTimer>
 #include <QActionGroup>
 #include <QPainter>
 #include <QToolBar>
@@ -269,6 +271,8 @@ void MainWindow::buildMenus() {
 
     auto* help = menuBar()->addMenu("&Help");
     help->addAction("&Keyboard Reference", QKeySequence::HelpContents, this, &MainWindow::showKeyReference);
+    help->addAction("User &Guide (online)", this, [] { QDesktopServices::openUrl(QUrl("https://cmfx.trevfox.dev/guide.html")); })
+        ->setStatusTip("The full guide on cmfx.trevfox.dev");
     const QString repo = QString(CHEMFOX_REPO_URL);
     auto openRepo = [this, repo](const QString& page, const QString& what) {
         if (repo.isEmpty()) {
@@ -281,8 +285,17 @@ void MainWindow::buildMenus() {
     help->addSeparator();
     help->addAction("&Report a Problem…", this, [openRepo] { openRepo("/issues/new/choose", "Report a Problem"); })
         ->setStatusTip("Open a bug report or feature request on GitHub");
-    help->addAction("Releases && &Updates…", this, [openRepo] { openRepo("/releases", "Releases"); })
-        ->setStatusTip("See whether a newer version is out");
+    // Updates: the only network request ChemFox makes (README → Privacy).
+    auto* updater = new updates::Checker(repo, CHEMFOX_VERSION, this);
+    help->addAction("Check for &Updates…", this, [updater] { updater->check(true); })
+        ->setStatusTip("Ask GitHub whether a newer ChemFox is out");
+    QAction* autoUpdate = help->addAction("Check for Updates Automatically");
+    autoUpdate->setCheckable(true);
+    autoUpdate->setChecked(QSettings().value("updates/auto", true).toBool());
+    autoUpdate->setStatusTip("At most once a day, at startup; only asks GitHub for the list of releases");
+    connect(autoUpdate, &QAction::toggled, this, [](bool on) { QSettings().setValue("updates/auto", on); });
+    QTimer::singleShot(4000, updater, &updates::Checker::checkIfDue);
+    help->addAction("Release &Notes", this, [openRepo] { openRepo("/releases", "Release Notes"); });
     help->addAction("Third-Party &Licences", this, [this] {
         // Installed builds carry them next to the app (inside the bundle's Resources on macOS).
         QString dir = QCoreApplication::applicationDirPath() + "/licenses";
@@ -612,7 +625,7 @@ void MainWindow::open() {
     QSettings s;
     QString path = QFileDialog::getOpenFileName(
         this, "Open", s.value("lastDir").toString(),
-        "All supported (*.chemfox *.chemdoc *.json *.svg *.mol *.sdf *.smi);;ChemFox (*.chemfox *.chemdoc *.json);;"
+        "All supported (*.cmfx *.chemfox *.chemdoc *.json *.svg *.mol *.sdf *.smi);;ChemFox (*.cmfx *.chemfox *.chemdoc *.json);;"
         "SVG exported by ChemFox (*.svg);;Structures (*.mol *.sdf *.smi)");
     if (path.isEmpty()) return;
     s.setValue("lastDir", QFileInfo(path).absolutePath());
@@ -633,9 +646,13 @@ bool MainWindow::save() {
 
 bool MainWindow::saveAs() {
     QSettings s;
-    QString path = QFileDialog::getSaveFileName(this, "Save As", s.value("lastDir").toString() + "/untitled.chemfox",
-                                                "ChemFox (*.chemfox)");
+    // New files are .cmfx; an open .chemfox file is offered back under its own name as .cmfx.
+    QString base = path_.isEmpty() ? s.value("lastDir").toString() + "/untitled"
+                                   : QFileInfo(path_).absolutePath() + "/" + QFileInfo(path_).completeBaseName();
+    QString path = QFileDialog::getSaveFileName(this, "Save As", base + ".cmfx",
+                                                "ChemFox (*.cmfx);;ChemFox, older extension (*.chemfox)");
     if (path.isEmpty()) return false;
+    if (QFileInfo(path).suffix().isEmpty()) path += ".cmfx";
     s.setValue("lastDir", QFileInfo(path).absolutePath());
     path_ = path;
     bool ok = save();

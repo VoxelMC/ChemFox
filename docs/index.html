@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ChemFox | trevfox.dev</title>
 <meta name="description" content="ChemFox: a keyboard-first editor for chemical structures and reaction schemes. Free, offline, Windows and macOS.">
+<meta property="og:title" content="ChemFox">
+<meta property="og:description" content="A keyboard-first editor for chemical structures and reaction schemes. Free, offline, Windows and macOS.">
+<meta property="og:image" content="https://cmfx.trevfox.dev/assets/app.png">
+<meta name="theme-color" content="#f06e1e">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/icon.png" type="image/png">
 <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
@@ -12,79 +16,18 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600&family=PT+Mono&family=Rubik:ital,wght@0,300..700;1,400&display=swap" rel="stylesheet">
 <script>
-  // Same default as trevfox.dev (dark); remembers the toggle where storage is available.
+  // Dark by default, like trevfox.dev; remembers the toggle where storage is available.
   try { if (localStorage.getItem("theme") === "light") document.documentElement.classList.remove("dark"); } catch (e) {}
 </script>
-<style>
-  /* Tokens taken from trevfox.dev */
-  :root {
-    --bg: #fff8f3; --text: #424242; --accent: #f06e1e; --code-bg: #fde8d9; --muted: #6b6b6b;
-    --sans: "Rubik", ui-sans-serif, system-ui, sans-serif;
-    --nav: "JetBrains Mono", ui-monospace, monospace;
-    --mono: "PT Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  }
-  .dark { --bg: #1a1a1a; --text: #ffffff; --code-bg: #333333; --muted: #b8b8b8; }
-  * { box-sizing: border-box; }
-  html { background: var(--bg); }
-  body { margin: 0 auto; max-width: 77ch; padding: 0 16px; background: var(--bg); color: var(--text);
-         font: 400 16px/1.6 var(--sans); transition: background-color .4s, color .4s; }
-  a { color: inherit; }
-
-  /* Header, like the blog's: wordmark left, mono nav right */
-  header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 28px 0 8px; flex-wrap: wrap; }
-  .logo { font-size: 30px; font-weight: 500; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
-  .logo img { width: 34px; height: 34px; border-radius: 8px; }
-  .logo .a { color: var(--accent); }
-  nav { display: flex; align-items: center; gap: 22px; font-family: var(--nav); font-weight: 600; }
-  nav a { text-decoration: none; }
-  nav a:hover, .theme:hover { color: var(--accent); }
-  .theme { background: none; border: 0; color: inherit; cursor: pointer; padding: 4px; display: inline-flex; }
-  .theme svg { width: 20px; height: 20px; }
-  .dark .sun-only, :root:not(.dark) .moon-only { display: none; }
-
-  main { padding: 28px 0 40px; }
-  .lede { font-size: 1.15rem; margin: 0 0 6px; }
-  .lede strong { color: var(--accent); font-weight: 500; }
-  .sub { color: var(--muted); margin: 0 0 28px; }
-
-  /* Section dividers: label + 2px rule (the blog's month dividers) */
-  .divider { display: flex; align-items: center; gap: 8px; margin: 36px 0 16px; }
-  .divider span { white-space: nowrap; }
-  .divider i { height: 2px; flex: 1; background: var(--text); }
-
-  /* Entries: accent bar on the left, accent title, meta line (the blog's post previews) */
-  .entry { display: flex; gap: 12px; margin-bottom: 20px; }
-  .entry::before { content: ""; width: 4px; border-radius: 4px; background: var(--accent); flex: none; }
-  .entry h3 { margin: 0; font-size: 20px; font-weight: 500; }
-  .entry h3 a, .entry h3 { color: var(--accent); text-decoration: none; }
-  .entry h3 a:hover { text-decoration: underline; }
-  .meta { font-size: 14px; letter-spacing: .35px; margin-top: 2px; }
-  .tags a { margin-right: 8px; text-decoration: underline; }
-  .entry p { margin: 4px 0 0; }
-
-  figure { margin: 0; }
-  figure img { width: 100%; height: auto; display: block; border: 2px solid var(--accent); border-radius: 8px; background: #fff; }
-  figcaption { font-size: 14px; color: var(--muted); margin-top: 6px; }
-
-  kbd { font: 14px var(--mono); background: var(--code-bg); border-radius: 4px; padding: 1px 6px; }
-  code { font: 14px var(--mono); background: var(--code-bg); border-radius: 4px; padding: 1px 5px; }
-  table { border-collapse: collapse; width: 100%; font-size: 15px; }
-  td { padding: 7px 8px 7px 0; vertical-align: top; border-bottom: 1px solid color-mix(in srgb, var(--text) 18%, transparent); }
-  td:first-child { white-space: nowrap; padding-right: 16px; }
-
-  footer { font: 300 12px var(--mono); text-align: center; padding: 24px 0 32px; }
-  footer a { text-decoration: none; }
-  footer a:hover { color: var(--accent); }
-  @media (max-width: 560px) { nav { gap: 14px; font-size: 14px; } .logo { font-size: 26px; } }
-</style>
+<link rel="stylesheet" href="assets/site.css">
 </head>
 <body>
 <header>
-  <a class="logo" href="#"><img src="assets/icon.png" alt=""><span><span class="a">chem</span>fox</span></a>
+  <a class="logo" href="./"><img src="assets/icon.png" alt=""><span><span class="a">chem</span>fox</span></a>
   <nav>
     <a href="#download">download</a>
     <a href="#features">features</a>
-    <a href="#keys">keys</a>
+    <a href="guide.html">guide</a>
     <a href="https://trevfox.dev">trevfox.dev</a>
     <button class="theme" id="theme" aria-label="Toggle light and dark">
       <svg class="moon-only" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
@@ -106,15 +49,15 @@
   </div></div>
   <div class="entry"><div>
     <h3><a id="dl-mac" href="#">ChemFox for macOS</a></h3>
-    <div class="meta"><span id="dl-mac-sub">macOS 11+, Apple Silicon · disk image</span></div>
+    <div class="meta"><span id="dl-mac-sub">macOS 11+, Apple silicon (M1 or later) · disk image</span></div>
   </div></div>
-  <p class="sub"><span id="version">Early test version.</span> <a id="all" href="#">All downloads &amp; release notes</a> ·
-    <a id="issues" href="#">tell me what breaks</a></p>
+  <p class="sub"><span id="version">Beta.</span> <a id="all" href="#">All downloads &amp; release notes</a> ·
+    <a href="guide.html">user guide</a> · <a id="issues" href="#">tell me what breaks</a></p>
 
   <div class="divider"><span>First launch</span><i></i></div>
   <div class="entry"><div>
     <h3>Windows: "Windows protected your PC"</h3>
-    <p>Test builds aren't code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>. No administrator rights needed.</p>
+    <p>Beta builds aren't code-signed yet. Click <b>More info</b>, then <b>Run anyway</b>. No administrator rights needed.</p>
   </div></div>
   <div class="entry"><div>
     <h3>macOS: "can't be opened"</h3>
@@ -129,9 +72,16 @@
     <p>Point at an atom and press <kbd>N</kbd>, <kbd>O</kbd>, <kbd>2</kbd> or <kbd>Shift</kbd>+<kbd>6</kbd>. No tool switching for everyday edits, and every key can be rebound.</p>
   </div></div>
   <div class="entry"><div>
-    <h3>Reactions from text</h3>
+    <h3>Build without touching the mouse</h3>
+    <div class="meta tags"><a>#focused-atom</a><a>#keyboard</a></div>
+    <p>Press <kbd>1</kbd> and the new atom lights up orange: every key now acts on it. Point the mouse to steer the chain,
+      walk along bonds with the arrow keys, drop in an acetyl with <kbd>Shift</kbd>+<kbd>C</kbd>. <kbd>Esc</kbd> when you're done.</p>
+  </div></div>
+  <div class="entry"><div>
+    <h3>Reactions in one keystroke</h3>
     <div class="meta tags"><a>#reactions</a><a>#atom-mapping</a></div>
-    <p>Type SMILES or SMARTS for each reactant and product and get a laid-out, auto-mapped scheme with broken and formed bonds coloured.</p>
+    <p><kbd>Ctrl</kbd>+<kbd>→</kbd> on a structure draws the arrow and a mapped copy, ready to edit into the product, with the bonds you break and form coloured as you go.
+      Or type SMILES for a whole reaction and get it laid out and auto-mapped.</p>
   </div></div>
   <div class="entry"><div>
     <h3>Schemes that stay tidy</h3>
@@ -141,7 +91,8 @@
   <div class="entry"><div>
     <h3>Chemistry that's right</h3>
     <div class="meta tags"><a>#rdkit</a><a>#stereochemistry</a></div>
-    <p>RDKit underneath: formula, mass, SMILES, InChI, R/S and E/Z labels, valence and stereo warnings. Abbreviations like CO₂Et count toward the formula.</p>
+    <p>RDKit underneath: formula, mass, SMILES, InChI, R/S and E/Z labels, valence and stereo warnings. Abbreviations like CO₂Et count toward the formula,
+      and you can define your own groups from SMILES.</p>
   </div></div>
   <div class="entry"><div>
     <h3>Publication styles and exports</h3>
@@ -156,45 +107,38 @@
   <div class="divider" id="keys"><span>A few keys</span><i></i></div>
   <table>
     <tr><td><kbd>C</kbd> <kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd>…</td><td>Change the atom under the cursor, or add one on empty canvas</td></tr>
-    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Grow a bond from an atom, or set a bond's order</td></tr>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Grow a bond (the new atom stays focused), or set a bond's order</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Attach or fuse a ring · benzene</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>C</kbd> · <kbd>E</kbd></td><td>Add an acetyl · expand or collapse a group label</td></tr>
     <tr><td><kbd>W</kbd> <kbd>H</kbd> <kbd>F</kbd></td><td>Wedge, hash, flip a bond</td></tr>
-    <tr><td><kbd>Enter</kbd></td><td>Type a label (OMe, CO2Et, NHBoc), or edit an arrow's conditions</td></tr>
-    <tr><td><kbd>Ctrl</kbd>+<kbd>V</kbd></td><td>Paste a SMILES, InChI or MOL block</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>↑</kbd></td><td>Continue the reaction from the selected structure</td></tr>
     <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Clean up a structure; press again for other orientations</td></tr>
-    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> / <kbd>L</kbd></td><td>Arrange the scheme / align products to reactants</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Arrange the scheme</td></tr>
   </table>
-  <p class="sub" style="margin-top:10px">On a Mac, use <kbd>⌘</kbd> where it says Ctrl.</p>
+  <p class="sub" style="margin-top:10px">On a Mac, use <kbd>⌘</kbd> where it says Ctrl. Every key is in the <a href="guide.html#keys">guide</a>.</p>
+
+  <div class="divider" id="privacy"><span>Privacy</span><i></i></div>
+  <p>ChemFox runs entirely on your computer: no accounts, no analytics, no telemetry, and your drawings never leave your machine.
+    The only thing it ever asks the internet is GitHub's list of releases, at most once a day, to tell you about updates
+    (turn it off under Help).</p>
 </main>
 
 <footer>
   Trevor Fox / ChemFox · Apache-2.0 / <a id="src" href="#">source</a> / <a href="press/chemfox-press-kit.zip" download>press kit</a> / <a href="https://trevfox.dev">trevfox.dev</a>
 </footer>
 
+<script src="assets/site.js"></script>
 <script>
-document.getElementById("theme").addEventListener("click", () => {
-  const dark = document.documentElement.classList.toggle("dark");
-  try { localStorage.setItem("theme", dark ? "dark" : "light"); } catch (e) {}
-});
-
-// Works out the repository from the Pages address (<owner>.github.io/<repo>) unless set below, then points the
-// download links at the newest installer for each platform. Falls back to the releases page.
+// Points the download links at the newest installer for each platform; falls back to the releases page.
 (function () {
-  const REPO = "";  // e.g. "trevfox/ChemFox" when hosted somewhere other than GitHub Pages
-  let owner = "", name = "ChemFox";
-  if (REPO) [owner, name] = REPO.split("/");
-  else if (location.hostname.endsWith(".github.io")) {
-    owner = location.hostname.split(".")[0];
-    name = location.pathname.split("/").filter(Boolean)[0] || name;
-  }
-  const repo = owner ? `https://github.com/${owner}/${name}` : "https://github.com";
+  const REPO = "VoxelMC/ChemFox";
+  const repo = `https://github.com/${REPO}`;
   const set = (id, href) => { const a = document.getElementById(id); if (a) a.href = href; };
-  ["dl-win", "dl-mac", "all"].forEach(id => set(id, owner ? `${repo}/releases` : "#"));
+  ["dl-win", "dl-mac", "all"].forEach(id => set(id, `${repo}/releases`));
   set("issues", `${repo}/issues/new/choose`);
   set("src", repo);
-  if (!owner) return;
-  // Newest release, including pre-releases (test builds are marked as pre-releases).
-  fetch(`https://api.github.com/repos/${owner}/${name}/releases?per_page=5`)
+  // Newest release, including pre-releases (the betas are pre-releases).
+  fetch(`https://api.github.com/repos/${REPO}/releases?per_page=5`)
     .then(r => r.ok ? r.json() : [])
     .then(list => {
       const rel = list.find(r => !r.draft);
@@ -206,7 +150,7 @@ document.getElementById("theme").addEventListener("click", () => {
       if (win) { set("dl-win", win.browser_download_url); document.getElementById("dl-win-sub").textContent = `${win.name} · ${mb(win)}`; }
       if (mac) { set("dl-mac", mac.browser_download_url); document.getElementById("dl-mac-sub").textContent = `${mac.name} · ${mb(mac)}`; }
       set("all", rel.html_url);
-      document.getElementById("version").textContent = `Version ${rel.tag_name.replace(/^v/, "")} (test build).`;
+      document.getElementById("version").textContent = `Version ${rel.tag_name.replace(/^v/, "")} (beta).`;
     })
     .catch(() => {});
 })();

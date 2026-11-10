@@ -20,7 +20,7 @@ APP="$BUILD/bin/ChemFox.app"
 echo "== Building ChemFox $VERSION for $ARCH"
 cmake -S "$ROOT" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release \
       -DCMAKE_PREFIX_PATH="$PREFIX" -DRDKIT_ROOT="$PREFIX" \
-      -DCHEMFOX_REPO_URL="${CHEMFOX_REPO_URL:-}" \
+      -DCHEMFOX_REPO_URL="${CHEMFOX_REPO_URL:-https://github.com/VoxelMC/ChemFox}" \
       -DCMAKE_OSX_ARCHITECTURES="$ARCH"
 cmake --build "$BUILD"
 

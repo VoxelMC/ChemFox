@@ -1,7 +1,7 @@
 # Configure and build ChemFox on Windows with MSVC and a conda-forge environment.
 #   .\build.ps1 [-Test] [-Run] [-Prefix <conda env>] [-RepoUrl <https://github.com/you/ChemFox>]
 # The environment defaults to ..\.env (see environment.yml); CI passes its own.
-param([string]$Config = "Release", [switch]$Run, [switch]$Test, [string]$Prefix = "", [string]$RepoUrl = "")
+param([string]$Config = "Release", [switch]$Run, [switch]$Test, [string]$Prefix = "", [string]$RepoUrl = "https://github.com/VoxelMC/ChemFox")
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 if (-not $Prefix) { $Prefix = if ($env:CONDA_PREFIX) { $env:CONDA_PREFIX } else { Join-Path $root "..\.env" } }

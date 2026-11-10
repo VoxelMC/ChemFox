@@ -14,6 +14,7 @@
 #include "warnings/Warnings.h"
 
 #include "app.h"
+#include "app/Updates.h"
 
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
@@ -317,7 +318,7 @@ TEST_CASE("figure features round-trip: bent arrows, colours, text size, CXSMILES
 }
 
 TEST_CASE("the resveratrol sample loads as placed (it is a working file, so contents may change)") {
-    QString path = QStringLiteral(CHEMFOX_SOURCE_DIR) + "/samples/resveratrol_biosynthesis.chemfox";
+    QString path = QStringLiteral(CHEMFOX_SOURCE_DIR) + "/samples/resveratrol_biosynthesis.cmfx";
     auto d = io::loadFile(path);
     REQUIRE(d);
     CHECK_FALSE(d->needsLayout);
@@ -598,4 +599,34 @@ TEST_CASE("groups: acetyl on chain ends and middles, custom groups, carried in f
     REQUIRE(back);
     CHECK(labels::fragmentSmiles("Tr") == "*C(c1ccccc1)(c1ccccc1)c1ccccc1");
     CHECK(chem::info(*back->moleculeOfAtom(tr)).formula == "C19H16O");
+}
+TEST_CASE("files: .cmfx is the extension, .chemfox and .chemdoc still open") {
+    auto d = io::loadFile(QStringLiteral(CHEMFOX_SOURCE_DIR) + "/samples/fischer.cmfx");
+    REQUIRE(d);
+    QDir tmp(QDir::tempPath());
+    for (const char* ext : {".cmfx", ".chemfox", ".chemdoc"}) {
+        QString p = tmp.filePath(QString("chemfox_ext_test") + ext);
+        REQUIRE(io::saveFile(p, *d));
+        auto back = io::loadFile(p);
+        REQUIRE(back);
+        CHECK(back->molecules.size() == d->molecules.size());
+        QFile::remove(p);
+    }
+}
+TEST_CASE("updates: version comparison and picking the newest release") {
+    using cd::updates::compareVersions;
+    CHECK(compareVersions("0.2.1", "0.2.0") > 0);
+    CHECK(compareVersions("v0.10.0", "0.9.9") > 0);
+    CHECK(compareVersions("0.2.0", "v0.2.0") == 0);
+    CHECK(compareVersions("1.0.0-beta.2", "1.0.0") < 0);
+    CHECK(compareVersions("1.0.0-beta.10", "1.0.0-beta.2") > 0);
+    CHECK(compareVersions("1.0.0-alpha", "1.0.0-beta") < 0);
+    QJsonArray list;
+    auto rel = [](const char* tag, bool draft) {
+        return QJsonObject{{"tag_name", tag}, {"draft", draft}, {"html_url", QString("https://x/") + tag}, {"body", "notes"}};
+    };
+    list << rel("v0.2.0", false) << rel("v0.3.0", true) << rel("v0.2.1", false) << rel("nightly", false);
+    auto r = cd::updates::newestRelease(list);
+    CHECK(r.tag == "v0.2.1");  // the draft and the non-version tag are ignored
+    CHECK(r.url == "https://x/v0.2.1");
 }

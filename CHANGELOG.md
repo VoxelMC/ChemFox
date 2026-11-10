@@ -10,6 +10,27 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-10
+
+### Added
+- Check for Updates (Help menu): asks GitHub whether a newer ChemFox is out. It also checks quietly at most
+  once a day at startup, which you can turn off with Help → Check for Updates Automatically. This is the only
+  network request ChemFox makes.
+- A user guide with every keyboard shortcut, at cmfx.trevfox.dev/guide.html (Help → User Guide).
+
+### Changed
+- Documents now save as `.cmfx`. `.chemfox` (and the older `.chemdoc`) files still open and can be saved back
+  under their own name; Save As offers `.cmfx`. The installers associate `.cmfx` as well as both older
+  extensions. The samples are now `.cmfx`.
+- The website moved to cmfx.trevfox.dev.
+- macOS: the app's identifier is now `dev.trevfox.chemfox` (it was `app.chemfox.ChemFox`). Settings are kept;
+  you may need to choose ChemFox again as the app for opening documents.
+
+### Fixed
+- Third-party notices now cover the code compiled into RDKit (InChI, coordgenlibs, maeparser,
+  RingDecomposerLib, Eigen), and credit FreeType and the Independent JPEG Group.
+- The Windows build no longer includes Microsoft's DirectX shader compiler DLLs, which ChemFox doesn't use.
+
 ## [0.2.0] - 2026-11-10
 
 ### Added

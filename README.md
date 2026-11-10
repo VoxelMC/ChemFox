@@ -7,8 +7,10 @@ reports and slides. Native on Windows and macOS, works offline. Chemistry by [RD
 
 ![A reaction scheme drawn in ChemFox](docs/assets/scheme.png)
 
-> **Early test version (0.x).** Things will change and there will be bugs. Please
+> **Beta (0.x).** Things will change and there will be bugs. Please
 > [report what you find](../../issues/new/choose).
+>
+> Website and downloads: **[cmfx.trevfox.dev](https://cmfx.trevfox.dev)** · [User guide](https://cmfx.trevfox.dev/guide.html)
 
 ## Install
 
@@ -17,7 +19,7 @@ Download the latest build from **[Releases](../../releases)**:
 | | File |
 | --- | --- |
 | Windows 10/11 (64-bit) | `ChemFox-<version>-setup.exe` (or the `.zip` to run without installing) |
-| macOS 11+ | `ChemFox-<version>-macos-<arm64/x86_64>.dmg` |
+| macOS 11+ (Apple silicon: M1 or later) | `ChemFox-<version>-macos-arm64.dmg` |
 
 The test builds aren't code-signed yet, so the first launch needs one extra click:
 
@@ -51,10 +53,26 @@ The test builds aren't code-signed yet, so the first launch needs one extra clic
 
 See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
+## Privacy
+
+ChemFox runs entirely on your computer and collects nothing: no accounts, no analytics, no telemetry. Your
+drawings never leave your machine.
+
+The one exception is the **update check**, which asks GitHub's public releases list whether a newer ChemFox
+exists (at most once a day, at startup). It sends nothing about you or your documents beyond what any web
+request carries (your IP address, to GitHub). Turn it off in **Help → Check for Updates Automatically**; you
+can still check by hand with **Help → Check for Updates**.
+
 ## Reporting problems
 
 Use **Help → Report a Problem** in the app, or [open an issue](../../issues/new/choose). The form asks for your
-version (Help → About) and system; attaching the `.chemfox` file that shows the problem helps most.
+version (Help → About) and system; attaching the `.cmfx` file that shows the problem helps most. Security
+problems: please report them privately ([SECURITY.md](SECURITY.md)).
+
+## Contributing
+
+ChemFox is a one-person project and **doesn't accept pull requests**. You're welcome to fork it under the
+Apache-2.0 licence. Bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Building from source
 
@@ -76,9 +94,9 @@ micromamba create -n chemfox -f environment.yml && micromamba activate chemfox
 packaging/macos/build-mac.sh      # build-mac/bin/ChemFox.app and dist/ChemFox-<version>-macos-<arch>.dmg
 ```
 
-Headless export, handy for batch figures: `ChemFox --export input.chemfox out.svg --arrange --preset acs`.
+Headless export, handy for batch figures: `ChemFox --export input.cmfx out.svg --arrange --preset acs`.
 
-[CONTRIBUTING.md](CONTRIBUTING.md) covers the code layout, tests and how releases are made.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers the code layout, tests and how releases are made (useful for forks).
 
 ## Licence
 

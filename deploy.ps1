@@ -1,7 +1,7 @@
 # Build a self-contained folder, a zip and (with -Installer) a Windows installer.
 #   .\deploy.ps1 [-Installer] [-Prefix <conda env>] [-RepoUrl <url>]
 # Outputs in dist\: ChemFox\ChemFox.exe, ChemFox-<version>-windows-x64.zip, ChemFox-<version>-setup.exe
-param([switch]$NoZip, [switch]$Installer, [string]$Prefix = "", [string]$RepoUrl = "")
+param([switch]$NoZip, [switch]$Installer, [string]$Prefix = "", [string]$RepoUrl = "https://github.com/VoxelMC/ChemFox")
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 if (-not $Prefix) { $Prefix = if ($env:CONDA_PREFIX) { $env:CONDA_PREFIX } else { Join-Path $root "..\.env" } }
@@ -23,7 +23,7 @@ Copy-Item (Join-Path $root "build\bin\ChemFox.exe") $dist
 # Qt libraries and plugins. The compiler runtime is copied below from the env, matching what Qt was built with.
 $env:PATH = "$bin;$env:PATH"
 & (Join-Path $bin "windeployqt6.exe") --qtpaths (Join-Path $bin "qtpaths6.exe") --release --no-translations --no-compiler-runtime --no-opengl-sw `
-    --no-system-d3d-compiler --no-quick-import --dir $dist (Join-Path $dist "ChemFox.exe") | Out-Null
+    --no-system-d3d-compiler --no-system-dxc-compiler --no-quick-import --dir $dist (Join-Path $dist "ChemFox.exe") | Out-Null
 if ($LASTEXITCODE) { throw "windeployqt failed ($LASTEXITCODE)" }
 
 # Everything else (RDKit, Boost, freetype, ICU, the MSVC runtime, ...): follow imports

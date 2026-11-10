@@ -411,7 +411,7 @@ TEST_CASE("snapshot: align products on the report figure") {
     QString dir = qEnvironmentVariable("CHEMFOX_SNAPSHOT");
     if (dir.isEmpty()) return;
     testApp();
-    auto d = io::loadFile(QStringLiteral(CHEMFOX_SOURCE_DIR) + "/samples/resveratrol_report.chemfox");
+    auto d = io::loadFile(QStringLiteral(CHEMFOX_SOURCE_DIR) + "/samples/resveratrol_report.cmfx");
     REQUIRE(d);
     Canvas c;
     c.resize(1500, 760);

@@ -44,7 +44,7 @@ body:
     id: files
     attributes:
       label: Files or screenshots
-      description: Drag in the .chemfox file (zip it first if GitHub refuses the extension) and/or a screenshot.
+      description: Drag in the .cmfx file (zip it first if GitHub refuses the extension) and/or a screenshot.
   - type: dropdown
     id: severity
     attributes:

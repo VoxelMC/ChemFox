@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 # The version lives here only; it flows into the app, the installers and the release names.
-project(ChemFox VERSION 0.2.0 LANGUAGES CXX)
+project(ChemFox VERSION 0.2.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -9,10 +9,10 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "Oldest macOS supported")
 
 # Where "Help → Report a Problem" and the update link point. The release workflow sets it.
-set(CHEMFOX_REPO_URL "" CACHE STRING "GitHub repository URL, e.g. https://github.com/you/ChemFox")
+set(CHEMFOX_REPO_URL "https://github.com/VoxelMC/ChemFox" CACHE STRING "GitHub repository URL, e.g. https://github.com/you/ChemFox")
 configure_file(src/version.h.in ${CMAKE_BINARY_DIR}/generated/version.h @ONLY)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Svg Network)
 
 # RDKit ships no CMake config on conda-forge for Windows, so link it by hand.
 set(RDKIT_ROOT "" CACHE PATH "Prefix that contains include/rdkit and lib/RDKit*")
@@ -86,12 +86,12 @@ set_target_properties(chemfox PROPERTIES
   OUTPUT_NAME ChemFox
   MACOSX_BUNDLE_INFO_PLIST ${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in
   MACOSX_BUNDLE_BUNDLE_NAME ChemFox
-  MACOSX_BUNDLE_GUI_IDENTIFIER app.chemfox.ChemFox
+  MACOSX_BUNDLE_GUI_IDENTIFIER dev.trevfox.chemfox
   MACOSX_BUNDLE_ICON_FILE chemfox.icns
   MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
   MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION})
 qt_add_resources(chemfox "icons" PREFIX "/icons" BASE packaging/icon FILES packaging/icon/chemfox.png)
-target_link_libraries(chemfox PRIVATE cd_editor cd_io cd_warnings)
+target_link_libraries(chemfox PRIVATE cd_editor cd_io cd_warnings Qt6::Network)  # Network: the update check only
 
 # Developer runs on Windows: let the exe find Qt plugins in the dependency prefix, and give a
 # launcher that puts the prefix's DLLs on PATH. (Installed builds carry their own copies.)

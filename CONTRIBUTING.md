@@ -1,5 +1,16 @@
 # Contributing to ChemFox
 
+**ChemFox isn't accepting contributions.** It's a one-person project and I don't have time to review pull
+requests, so they'll be closed unread. Please don't take it personally!
+
+- **Want a change?** Fork it. ChemFox is Apache-2.0: you're welcome to fork, modify and redistribute it,
+  as long as you keep the licence and NOTICE and make clear your version is modified.
+- **Found a bug?** [Bug reports](../../issues/new/choose) are welcome and read, but fixes are best effort and
+  may take a while.
+- **Security problem?** See [SECURITY.md](SECURITY.md); please don't open a public issue.
+
+The rest of this file is notes for anyone working on a fork (and for me).
+
 ## Code layout
 
 | Folder | What it does |
@@ -47,6 +58,7 @@ The workflow refuses to release if the tag and the CMake version disagree.
 
 ## File format
 
-Documents are JSON (`.chemfox`, format id `chemfox`; files from before the rename use `chemdoc` and still
-load). Bump `kFormatVersion` in `src/io/Native.h` and add a migration in `src/io/Native.cpp` whenever a change
+Documents are JSON with the extension `.cmfx` and format id `chemfox`. The older extensions `.chemfox` and
+`.chemdoc`, and the format id `chemdoc` from before the rename, still open; loading goes by the contents,
+not the extension. Bump `kFormatVersion` in `src/io/Native.h` and add a migration in `src/io/Native.cpp` whenever a change
 would make old versions misread new files; that's also a MAJOR (or, before 1.0, MINOR) version change.

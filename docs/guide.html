@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Guide · ChemFox | trevfox.dev</title>
+<meta name="description" content="How to use ChemFox: hover-and-type drawing, the focused atom, reactions and schemes, styles, exports and every keyboard shortcut.">
+<meta name="theme-color" content="#f06e1e">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600&family=PT+Mono&family=Rubik:ital,wght@0,300..700;1,400&display=swap" rel="stylesheet">
+<script>
+  try { if (localStorage.getItem("theme") === "light") document.documentElement.classList.remove("dark"); } catch (e) {}
+</script>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<header>
+  <a class="logo" href="./"><img src="assets/icon.png" alt=""><span><span class="a">chem</span>fox</span></a>
+  <nav>
+    <a href="./#download">download</a>
+    <a href="./#features">features</a>
+    <a href="guide.html" aria-current="page">guide</a>
+    <a href="https://trevfox.dev">trevfox.dev</a>
+    <button class="theme" id="theme" aria-label="Toggle light and dark">
+      <svg class="moon-only" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+      <svg class="sun-only" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+    </button>
+  </nav>
+</header>
+
+<main class="guide">
+  <p class="lede">The ChemFox guide <span class="badge">beta</span></p>
+  <p class="sub">Everything ChemFox does, and every key. On a Mac, read <kbd>⌘</kbd> wherever it says <kbd>Ctrl</kbd>.</p>
+
+  <div class="toc"><ol>
+    <li><a href="#basics">The basics: hover and type</a></li>
+    <li><a href="#drawing">Drawing structures</a></li>
+    <li><a href="#focus">The focused atom</a></li>
+    <li><a href="#groups">Labels and groups</a></li>
+    <li><a href="#selecting">Selecting and moving</a></li>
+    <li><a href="#reactions">Reactions and schemes</a></li>
+    <li><a href="#mapping">Atom mapping and bond changes</a></li>
+    <li><a href="#styles">Styles and exporting</a></li>
+    <li><a href="#files">Files</a></li>
+    <li><a href="#keys">Keyboard reference</a></li>
+    <li><a href="#customise">Changing keys</a></li>
+    <li><a href="#updates">Updates, privacy and help</a></li>
+  </ol></div>
+
+  <h2 id="basics"><a href="#basics">The basics: hover and type</a></h2>
+  <p>Most edits in ChemFox don't need a tool. Point at something and press a key: what the key does depends on what's under the
+    cursor. Point at an atom and press <kbd>N</kbd> to make it nitrogen; point at a bond and press <kbd>2</kbd> to make it double;
+    point at empty canvas and press <kbd>R</kbd> to drop a benzene ring there.</p>
+  <p>The thing a key will act on is highlighted as you move. When several things overlap (an atom label over a bond, say),
+    <kbd>Tab</kbd> cycles between them.</p>
+  <p>The toolbar on the left has the tools for everything else: <b>Select</b> (<kbd>V</kbd>), <b>Chain</b> (<kbd>G</kbd>),
+    <b>Arrow</b> (<kbd>Shift</kbd>+<kbd>A</kbd>), <b>Bent arrow</b> (<kbd>Shift</kbd>+<kbd>B</kbd>), <b>Text</b>
+    (<kbd>Shift</kbd>+<kbd>T</kbd>) and <b>Map</b> (<kbd>Ctrl</kbd>+<kbd>M</kbd>). With Select, dragging on empty canvas draws
+    a selection box.</p>
+  <div class="tip"><b>Moving around.</b> Scroll to zoom, <kbd>Shift</kbd>+scroll to pan sideways, and drag with the right or middle
+    button (or hold <kbd>Space</kbd> and drag) to pan. <kbd>Ctrl</kbd>+<kbd>0</kbd> fits the drawing to the window.</div>
+
+  <h2 id="drawing"><a href="#drawing">Drawing structures</a></h2>
+  <h3>Atoms and bonds</h3>
+  <ul>
+    <li><b>Elements:</b> <kbd>C</kbd> <kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd> <kbd>P</kbd> <kbd>F</kbd> <kbd>H</kbd>,
+      <kbd>L</kbd> for Cl, <kbd>B</kbd> for Br, <kbd>I</kbd> for I. On an atom they change it; on empty canvas they add one.</li>
+    <li><b>New bonds:</b> <kbd>1</kbd>, <kbd>2</kbd> or <kbd>3</kbd> on an atom grows a single, double or triple bond in a sensible
+      direction, leaning toward the mouse. You can also drag from an atom to draw a bond, or onto another atom to join them.</li>
+    <li><b>Bond order:</b> <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> on a bond.</li>
+    <li><b>Stereo:</b> <kbd>W</kbd> wedge, <kbd>H</kbd> hash, <kbd>Y</kbd> wavy. Pressing the same key again flips which end is narrow.
+      <kbd>F</kbd> flips a wedge, or moves a double bond's second line to the other side.</li>
+    <li><b>Charges and radicals:</b> <kbd>+</kbd> (or <kbd>=</kbd>) and <kbd>-</kbd> change the charge; <kbd>.</kbd> toggles a radical.</li>
+  </ul>
+  <h3>Chains and rings</h3>
+  <ul>
+    <li><b>Chains:</b> pick the Chain tool (<kbd>G</kbd>) and drag; the zig-zag follows the mouse. Or build one bond at a time from the
+      keyboard with the <a href="#focus">focused atom</a>.</li>
+    <li><b>Rings:</b> <kbd>Shift</kbd>+<kbd>3</kbd> to <kbd>Shift</kbd>+<kbd>8</kbd> add a 3- to 8-membered ring, <kbd>R</kbd> a benzene.
+      On a bond they fuse the ring onto it. On a chain end the atom becomes part of the ring; on an atom that already has two
+      bonds the ring hangs off a new bond instead (a saturated ring on a two-bond atom is drawn spiro).</li>
+  </ul>
+  <h3>Tidying up</h3>
+  <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>L</kbd> cleans up a structure with RDKit, keeping E/Z and R/S. Press it again to cycle through other tidy orientations.</li>
+    <li><b>Structure → Transform</b> flips and rotates; right-click a structure for the same and more.</li>
+    <li>Warnings (valence, overlaps, unbalanced brackets…) appear in the Warnings panel; each can be silenced for one item, one document or everywhere.</li>
+  </ul>
+
+  <h2 id="focus"><a href="#focus">The focused atom</a></h2>
+  <p>When a key grows a bond, the new atom becomes the <b>focused atom</b>, marked in light orange. From then on every key acts on it,
+    wherever the mouse is, so you can build a whole chain without aiming:</p>
+  <ol>
+    <li>Hover an atom and press <kbd>1</kbd>. The new atom turns orange.</li>
+    <li>Keep pressing <kbd>1</kbd> to extend the chain. Move the mouse to steer: each new bond leans toward the pointer. Leave the mouse
+      still and the chain carries on in a straight zig-zag.</li>
+    <li>Press any other key on the focused atom: <kbd>O</kbd> for oxygen, <kbd>2</kbd> for a double bond onward,
+      <kbd>Shift</kbd>+<kbd>C</kbd> for an acetyl, <kbd>R</kbd> for a phenyl.</li>
+    <li>Use the <b>arrow keys</b> to move the focus to a neighbouring atom along a bond.</li>
+    <li>Press <kbd>Esc</kbd> or click to finish.</li>
+  </ol>
+  <p>To focus an atom of an existing structure, click the structure to select it, then click the atom.</p>
+
+  <h2 id="groups"><a href="#groups">Labels and groups</a></h2>
+  <ul>
+    <li><b>Labels:</b> <kbd>Enter</kbd> on an atom lets you type a label: OMe, CO2Et, NHBoc, CoA and many more. Labels count toward the
+      formula, flip to read correctly from either side (CO₂Et / EtO₂C), and get their subscripts automatically.</li>
+    <li><b>Groups by key:</b> <kbd>Shift</kbd>+<kbd>C</kbd> adds an acetyl (Ac). Like rings, a group replaces a chain end, or hangs off a
+      new bond from an atom that already has two bonds.</li>
+    <li><b>Expand and collapse:</b> <kbd>E</kbd> on a label draws it out as atoms; <kbd>E</kbd> on any atom of the drawn-out group
+      collapses it back. Right-click for the same, or <b>Structure → Show Labels as Structures</b> for all of them.</li>
+    <li><b>Your own groups:</b> <b>Edit → Keyboard Shortcuts → Groups</b>. Give a name (say <code>Tr</code>) and a SMILES with one
+      <code>*</code> where it attaches (<code>*C(c1ccccc1)(c1ccccc1)c1ccccc1</code>), and optionally press a key for it. Custom groups work
+      like the built-in ones, and documents that use them carry the definition, so they open correctly on other computers.</li>
+  </ul>
+
+  <h2 id="selecting"><a href="#selecting">Selecting and moving</a></h2>
+  <ul>
+    <li>Click a structure, arrow or text to select it; <kbd>Shift</kbd>+click adds to the selection; <kbd>Alt</kbd>+click selects a single atom.</li>
+    <li>Drag a selection box on empty canvas; <kbd>Ctrl</kbd>+<kbd>A</kbd> selects everything.</li>
+    <li>Drag a bond to move its structure, or <kbd>Ctrl</kbd>+drag anything to move it.</li>
+    <li>Arrow keys nudge the selection (<kbd>Shift</kbd> for bigger steps). With a focused atom they move the focus instead.</li>
+    <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> deletes what's under the cursor, or the selection.</li>
+  </ul>
+
+  <h2 id="reactions"><a href="#reactions">Reactions and schemes</a></h2>
+  <h3>Continue Reaction</h3>
+  <p>Select a structure and press <kbd>Ctrl</kbd>+<kbd>→</kbd> (or <kbd>↓</kbd> <kbd>←</kbd> <kbd>↑</kbd>). ChemFox draws an arrow in
+    that direction and a copy of the structure past its head, selected and ready to edit into the product. The copy is mapped atom for
+    atom to the original and the step shows bond changes, so what you break and form is coloured as you edit. Press it again to carry on
+    from the copy.</p>
+  <h3>Arrows</h3>
+  <ul>
+    <li>Draw arrows with the Arrow tool, or press <kbd>A</kbd> on empty canvas. Bent arrows: the Bent tool, click each corner, <kbd>Enter</kbd> to finish.</li>
+    <li><kbd>Enter</kbd> on an arrow edits its conditions (above and below); formulas like H2SO4 get subscripts, and <code>**bold**</code> / <code>*italic*</code> work.</li>
+    <li><kbd>K</kbd> cycles the arrow kind: forward, equilibrium, retrosynthetic, resonance and more. Right-click for colour, head and line styles.</li>
+    <li>Drag an arrow's ends to re-anchor them; drag a bent arrow's corners and segments to reshape it.</li>
+  </ul>
+  <h3>Laying out a scheme</h3>
+  <ul>
+    <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> arranges the scheme, keeping each arrow's direction and converging routes. With a selection it tidies just that part.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> redraws products so the part they share with their reactant lines up.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> numbers compounds in scheme order; <kbd>Shift</kbd>+<kbd>N</kbd> on a structure edits its name and number.</li>
+  </ul>
+  <h3>Reactions from text</h3>
+  <p><b>Reaction → Reaction Builder</b> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) builds a reaction from SMILES or SMARTS: one row
+    per reactant and product, or a single reaction SMILES. It updates live, maps atoms automatically and lays the scheme out.</p>
+
+  <h2 id="mapping"><a href="#mapping">Atom mapping and bond changes</a></h2>
+  <ul>
+    <li><b>Show Bond Changes:</b> right-click an arrow, or <b>Reaction → Arrow → Show Bond Changes</b>, to colour bonds broken, formed and
+      changed in that step. Steps without a mapping are mapped automatically first.</li>
+    <li><b>Fixing the mapping:</b> <kbd>Ctrl</kbd>+<kbd>M</kbd> turns on mapping mode. Drag from a reactant atom to a product atom to map
+      them; drag onto empty canvas to unmap. Map numbers and partners show while it's on.</li>
+  </ul>
+
+  <h2 id="styles"><a href="#styles">Styles and exporting</a></h2>
+  <ul>
+    <li>Pick a style from the toolbar: default, ACS 1996, slides, poster or dark. The Style panel edits bond length, line widths, fonts,
+      arrow and text spacing and more, and saves them as a style of your own.</li>
+    <li><b>File → Export</b>: SVG (<kbd>Ctrl</kbd>+<kbd>E</kbd>; ChemFox can reopen it), PDF, PNG at any resolution, EMF for Word and
+      PowerPoint (Windows), and MOL/SDF.</li>
+    <li><kbd>Ctrl</kbd>+<kbd>C</kbd> copies an image plus SMILES; <b>Edit → Copy As</b> gives SMILES, InChI, InChIKey, MOL or an image.</li>
+    <li>Paste a SMILES, InChI or MOL block with <kbd>Ctrl</kbd>+<kbd>V</kbd>; it lands at the cursor.</li>
+  </ul>
+
+  <h2 id="files"><a href="#files">Files</a></h2>
+  <ul>
+    <li>ChemFox documents are <code>.cmfx</code> files. Older <code>.chemfox</code> and <code>.chemdoc</code> files still open.</li>
+    <li><b>File → Import Structure</b> (<kbd>Ctrl</kbd>+<kbd>I</kbd>) opens MOL, SDF, SMILES and InChI files.</li>
+    <li>Examples are in the <code>samples</code> folder (Start menu → ChemFox samples on Windows).</li>
+    <li>Batch figures from the command line: <code>ChemFox --export input.cmfx out.svg --arrange --preset acs</code>.</li>
+  </ul>
+
+  <h2 id="keys"><a href="#keys">Keyboard reference</a></h2>
+  <p>These are the defaults; all of them can be <a href="#customise">changed</a>. Hover keys act on what's under the cursor
+    (or the focused atom); commands use <kbd>Ctrl</kbd>.</p>
+
+  <h3>On an atom</h3>
+  <table>
+    <tr><td><kbd>C</kbd> <kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd> <kbd>P</kbd> <kbd>F</kbd> <kbd>H</kbd></td><td>Set the element</td></tr>
+    <tr><td><kbd>L</kbd> · <kbd>B</kbd> · <kbd>I</kbd></td><td>Chlorine · bromine · iodine</td></tr>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Grow a single, double or triple bond (and focus the new atom)</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Add a ring · benzene</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>C</kbd></td><td>Add an acetyl (Ac)</td></tr>
+    <tr><td><kbd>E</kbd></td><td>Expand or collapse a group label</td></tr>
+    <tr><td><kbd>Enter</kbd></td><td>Type a label</td></tr>
+    <tr><td><kbd>+</kbd> <kbd>=</kbd> · <kbd>-</kbd></td><td>Raise · lower the charge</td></tr>
+    <tr><td><kbd>.</kbd></td><td>Toggle a radical</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>Compound name and number</td></tr>
+  </table>
+
+  <h3>On a bond</h3>
+  <table>
+    <tr><td><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd></td><td>Single, double, triple</td></tr>
+    <tr><td><kbd>W</kbd> · <kbd>H</kbd> · <kbd>Y</kbd></td><td>Wedge · hash · wavy (again to reverse)</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Flip a wedge or a double bond's side</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Fuse a ring · benzene</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>Compound name and number</td></tr>
+  </table>
+
+  <h3>On an arrow, text or name</h3>
+  <table>
+    <tr><td><kbd>Enter</kbd></td><td>Edit the arrow's conditions, the text, or the name</td></tr>
+    <tr><td><kbd>K</kbd></td><td>Next arrow kind</td></tr>
+  </table>
+
+  <h3>On empty canvas</h3>
+  <table>
+    <tr><td><kbd>C</kbd> <kbd>N</kbd> <kbd>O</kbd>… <kbd>L</kbd> <kbd>B</kbd> <kbd>I</kbd></td><td>Add an atom</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Add a ring · benzene</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>C</kbd></td><td>Add an acetyl</td></tr>
+    <tr><td><kbd>A</kbd> · <kbd>T</kbd></td><td>Add an arrow · text</td></tr>
+  </table>
+
+  <h3>Anywhere</h3>
+  <table>
+    <tr><td><kbd>V</kbd> <kbd>G</kbd> <kbd>Shift</kbd>+<kbd>A</kbd> <kbd>Shift</kbd>+<kbd>B</kbd> <kbd>Shift</kbd>+<kbd>T</kbd></td><td>Select, Chain, Arrow, Bent arrow, Text tools</td></tr>
+    <tr><td><kbd>Tab</kbd></td><td>Next of several overlapping targets</td></tr>
+    <tr><td><kbd>Esc</kbd></td><td>Cancel, deselect, or finish with the focused atom</td></tr>
+    <tr><td><kbd>Delete</kbd> <kbd>Backspace</kbd></td><td>Delete</td></tr>
+    <tr><td><kbd>←</kbd> <kbd>→</kbd> <kbd>↑</kbd> <kbd>↓</kbd></td><td>Nudge the selection (<kbd>Shift</kbd>: further), or move the focused atom</td></tr>
+  </table>
+
+  <h3>Commands</h3>
+  <table>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>N</kbd> <kbd>O</kbd> <kbd>S</kbd></td><td>New, open, save</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>I</kbd> · <kbd>Ctrl</kbd>+<kbd>E</kbd></td><td>Import a structure · export SVG</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd> · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> / <kbd>Ctrl</kbd>+<kbd>Y</kbd></td><td>Undo · redo</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>X</kbd> <kbd>C</kbd> <kbd>V</kbd> · <kbd>Ctrl</kbd>+<kbd>A</kbd></td><td>Cut, copy, paste · select all</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd></td><td>Paste a SMILES or InChI (dialog)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>L</kbd></td><td>Clean structure (again: next orientation)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>→</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>↑</kbd></td><td>Continue the reaction</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd></td><td>Arrange scheme</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd></td><td>Align products to reactants</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd></td><td>Number compounds</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd></td><td>Reaction Builder</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>M</kbd></td><td>Mapping mode</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>+</kbd> <kbd>-</kbd> · <kbd>Ctrl</kbd>+<kbd>0</kbd> · <kbd>Ctrl</kbd>+<kbd>1</kbd></td><td>Zoom in, out · fit · actual size</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd></td><td>Keyboard Shortcuts (change keys, custom groups)</td></tr>
+    <tr><td><kbd>F1</kbd></td><td>Keyboard reference in the app</td></tr>
+  </table>
+
+  <h2 id="customise"><a href="#customise">Changing keys</a></h2>
+  <p><b>Edit → Keyboard Shortcuts</b> (<kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>K</kbd>) lists every action, bound or not:</p>
+  <ul>
+    <li><b>Commands:</b> anything in the menus. Select one and press the new shortcut.</li>
+    <li><b>Hover keys:</b> the single keys above, per target (atom, bond, empty canvas…). Common groups like Boc, TBS, OMe or CO2Me are
+      listed too: search for "Group" and give them a key.</li>
+    <li><b>Groups:</b> your own groups from SMILES, each with an optional key.</li>
+  </ul>
+  <p>Changes apply immediately and are kept when you update ChemFox.</p>
+
+  <h2 id="updates"><a href="#updates">Updates, privacy and help</a></h2>
+  <ul>
+    <li><b>Updates:</b> ChemFox checks for a new version at most once a day and tells you if there is one. <b>Help → Check for Updates</b>
+      checks now; untick <b>Help → Check for Updates Automatically</b> to stop it. Install a new version over the old one: your settings,
+      keys and groups are kept.</li>
+    <li><b>Privacy:</b> nothing else ever leaves your computer: no accounts, no analytics. The update check only asks GitHub for the list of releases.</li>
+    <li><b>Something broken?</b> <b>Help → Report a Problem</b>, with your version (Help → About) and, ideally, the <code>.cmfx</code> file.</li>
+  </ul>
+</main>
+
+<footer>
+  Trevor Fox / ChemFox · Apache-2.0 / <a href="https://github.com/VoxelMC/ChemFox">source</a> / <a href="press/chemfox-press-kit.zip" download>press kit</a> / <a href="https://trevfox.dev">trevfox.dev</a>
+</footer>
+<script src="assets/site.js"></script>
+</body>
+</html>

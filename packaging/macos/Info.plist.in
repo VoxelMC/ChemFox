@@ -20,12 +20,12 @@
   <key>UTExportedTypeDeclarations</key>
   <array>
     <dict>
-      <key>UTTypeIdentifier</key><string>app.chemfox.document</string>
+      <key>UTTypeIdentifier</key><string>dev.trevfox.chemfox.document</string>
       <key>UTTypeDescription</key><string>ChemFox document</string>
       <key>UTTypeConformsTo</key><array><string>public.json</string><string>public.data</string></array>
       <key>UTTypeIconFile</key><string>chemfox.icns</string>
       <key>UTTypeTagSpecification</key>
-      <dict><key>public.filename-extension</key><array><string>chemfox</string><string>chemdoc</string></array></dict>
+      <dict><key>public.filename-extension</key><array><string>cmfx</string><string>chemfox</string><string>chemdoc</string></array></dict>
     </dict>
   </array>
   <key>CFBundleDocumentTypes</key>
@@ -34,7 +34,7 @@
       <key>CFBundleTypeName</key><string>ChemFox document</string>
       <key>CFBundleTypeRole</key><string>Editor</string>
       <key>LSHandlerRank</key><string>Owner</string>
-      <key>LSItemContentTypes</key><array><string>app.chemfox.document</string></array>
+      <key>LSItemContentTypes</key><array><string>dev.trevfox.chemfox.document</string></array>
       <key>CFBundleTypeIconFile</key><string>chemfox.icns</string>
     </dict>
     <dict>

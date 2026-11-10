@@ -69,7 +69,7 @@ int exportCli(const QCommandLineParser& cli) {
     else if (ext == "png") ok = cd::io::exportPng(out, doc, r, ov, cli.value("dpi").toDouble(), false, &err);
     else if (ext == "emf") ok = cd::io::exportEmf(out, doc, r, ov, &err);
     else if (ext == "mol" || ext == "sdf") ok = cd::io::exportMol(out, doc, &err);
-    else if (ext == "chemfox" || ext == "chemdoc" || ext == "json") ok = cd::io::saveFile(out, doc, &err);
+    else if (ext == "cmfx" || ext == "chemfox" || ext == "chemdoc" || ext == "json") ok = cd::io::saveFile(out, doc, &err);
     else err = "unknown output type ." + ext;
     if (!ok) std::fprintf(stderr, "export failed: %s\n", qPrintable(err));
     return ok ? 0 : 1;

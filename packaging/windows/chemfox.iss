@@ -31,7 +31,7 @@ ChangesAssociations=yes
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
-Name: "associate"; Description: "Open .chemfox files with ChemFox"; GroupDescription: "Files:"
+Name: "associate"; Description: "Open .cmfx files with ChemFox"; GroupDescription: "Files:"
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
@@ -42,7 +42,8 @@ Name: "{group}\ChemFox samples"; Filename: "{app}\samples"
 Name: "{autodesktop}\ChemFox"; Filename: "{app}\ChemFox.exe"; Tasks: desktopicon
 
 [Registry]
-; .chemfox (and the older .chemdoc) open in ChemFox.
+; .cmfx (and the older .chemfox and .chemdoc) open in ChemFox.
+Root: HKA; Subkey: "Software\Classes\.cmfx"; ValueType: string; ValueName: ""; ValueData: "ChemFox.Document"; Flags: uninsdeletevalue; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\.chemfox"; ValueType: string; ValueName: ""; ValueData: "ChemFox.Document"; Flags: uninsdeletevalue; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\.chemdoc"; ValueType: string; ValueName: ""; ValueData: "ChemFox.Document"; Flags: uninsdeletevalue; Tasks: associate
 Root: HKA; Subkey: "Software\Classes\ChemFox.Document"; ValueType: string; ValueName: ""; ValueData: "ChemFox document"; Flags: uninsdeletekey; Tasks: associate
