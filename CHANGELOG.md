@@ -10,6 +10,14 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+### Added
+- Preferences (Edit → Preferences, Ctrl+,; ChemFox → Settings on macOS):
+  - General: the style for new documents, reopen the last document at startup, automatic update checks.
+  - Styles: your saved styles, with import, export, delete and open folder.
+  - Drawing: whether new bonds lean toward the mouse; scroll wheel pans (Ctrl+scroll zooms) for trackpads.
+  - Export: PNG resolution, whether to ask each time, transparent background.
+  - Keys: opens Keyboard Shortcuts and custom groups.
+
 ## [0.2.1] - 2026-11-10
 
 ### Added

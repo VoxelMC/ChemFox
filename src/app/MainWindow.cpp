@@ -3,6 +3,7 @@
 
 #include "app/ReactionBuilder.h"
 #include "app/Shortcuts.h"
+#include "app/Preferences.h"
 #include "app/StyleEditor.h"
 #include "app/Updates.h"
 
@@ -141,6 +142,7 @@ MainWindow::MainWindow() {
     restoreGeometry(s.value("window/geometry").toByteArray());
     restoreState(s.value("window/state").toByteArray());
 
+    applyPreferences();  // canvas options and the default style for the first blank document
     updateTitle();
     updateInfo();
     updateWarnings();
@@ -195,10 +197,10 @@ void MainWindow::buildMenus() {
     cmd(copyAs, "Image (PNG + SVG)", "copy.image");
     edit->addSeparator();
     edit->addAction("Silenced Warnings…", this, &MainWindow::showSilenced);
-    edit->addAction("&Keyboard Shortcuts…", QKeySequence("Ctrl+Alt+K"), this, [this] {
-        ShortcutsDialog dlg(shortcuts_, canvas_, this);
-        dlg.exec();
-    });
+    edit->addAction("&Keyboard Shortcuts…", QKeySequence("Ctrl+Alt+K"), this, [this] { openShortcuts(); });
+    // Ctrl+, (Cmd+, on macOS, where Qt moves it to ChemFox → Settings…).
+    QAction* prefsAction = edit->addAction("Pr&eferences…", QKeySequence("Ctrl+,"), this, &MainWindow::showPreferences);
+    prefsAction->setMenuRole(QAction::PreferencesRole);
 
     auto* structure = menuBar()->addMenu("&Structure");
     structure->addAction("&Clean Structure", QKeySequence("Ctrl+L"), canvas_, &Canvas::cleanStructure);
@@ -289,7 +291,7 @@ void MainWindow::buildMenus() {
     auto* updater = new updates::Checker(repo, CHEMFOX_VERSION, this);
     help->addAction("Check for &Updates…", this, [updater] { updater->check(true); })
         ->setStatusTip("Ask GitHub whether a newer ChemFox is out");
-    QAction* autoUpdate = help->addAction("Check for Updates Automatically");
+    QAction* autoUpdate = autoUpdateAction_ = help->addAction("Check for Updates Automatically");
     autoUpdate->setCheckable(true);
     autoUpdate->setChecked(QSettings().value("updates/auto", true).toBool());
     autoUpdate->setStatusTip("At most once a day, at startup; only asks GitHub for the list of releases");
@@ -583,10 +585,50 @@ bool MainWindow::maybeSave() {
 void MainWindow::newDocument() {
     if (!maybeSave()) return;
     path_.clear();
-    canvas_->setDocument(Document{});
+    canvas_->setDocument(blankDocument());
     canvas_->resetZoom();
     updateTitle();
     syncStyleUi();
+}
+
+Document MainWindow::blankDocument() const {
+    Document d;
+    d.styleName = prefs::defaultStyle();  // Preferences → General
+    return d;
+}
+
+void MainWindow::applyPreferences() {
+    QSettings s;
+    canvas_->setSteerToMouse(s.value(prefs::kSteerToMouse, true).toBool());
+    canvas_->setWheelPans(s.value(prefs::kWheelPans, false).toBool());
+    if (autoUpdateAction_) {
+        QSignalBlocker block(autoUpdateAction_);
+        autoUpdateAction_->setChecked(s.value(prefs::kAutoUpdate, true).toBool());
+    }
+    // A pristine untitled document follows a new default style straight away.
+    if (path_.isEmpty() && canvas_->doc().molecules.empty() && canvas_->doc().arrows.empty() &&
+        canvas_->doc().texts.empty() && canvas_->undoStack()->count() == 0)
+        canvas_->setDocument(blankDocument());
+    syncStyleUi();
+}
+
+void MainWindow::showPreferences() {
+    PreferencesDialog dlg([this] { openShortcuts(); }, this);
+    connect(&dlg, &PreferencesDialog::changed, this, &MainWindow::applyPreferences);
+    dlg.exec();
+    applyPreferences();
+}
+
+void MainWindow::openShortcuts() {
+    ShortcutsDialog dlg(shortcuts_, canvas_, this);
+    dlg.exec();
+}
+
+bool MainWindow::reopenLastFile() {
+    QSettings s;
+    if (!s.value(prefs::kReopenLast, false).toBool()) return false;
+    QString last = s.value(prefs::kLastFile).toString();
+    return !last.isEmpty() && QFileInfo::exists(last) && openPath(last);
 }
 
 bool MainWindow::openPath(const QString& path) {
@@ -615,6 +657,7 @@ bool MainWindow::openPath(const QString& path) {
     }
     canvas_->setDocument(*d);
     path_ = lower.endsWith(".svg") ? QString() : path;
+    if (!path_.isEmpty()) QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
     updateTitle();
     syncStyleUi();
     return true;
@@ -640,6 +683,7 @@ bool MainWindow::save() {
         return false;
     }
     canvas_->undoStack()->setClean();
+    QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
     statusBar()->showMessage("Saved " + path_);
     return true;
 }
@@ -708,10 +752,14 @@ void MainWindow::exportAs(const QString& kind) {
     else if (kind == "emf") ok = io::exportEmf(path, d, r, ov, &err);
     else {
         bool got = false;
-        int dpi = QInputDialog::getInt(this, "PNG resolution", "Dots per inch:", s.value("pngDpi", 300).toInt(), 72, 2400, 50, &got);
-        if (!got) return;
-        s.setValue("pngDpi", dpi);
-        ok = io::exportPng(path, d, r, ov, dpi, false, &err);
+        int dpi = s.value(prefs::kPngDpi, 300).toInt();
+        if (s.value(prefs::kPngAsk, true).toBool()) {  // Preferences → Export can turn this question off
+            bool got = false;
+            dpi = QInputDialog::getInt(this, "PNG resolution", "Dots per inch:", dpi, 72, 2400, 50, &got);
+            if (!got) return;
+            s.setValue(prefs::kPngDpi, dpi);
+        }
+        ok = io::exportPng(path, d, r, ov, dpi, s.value(prefs::kPngTransparent, false).toBool(), &err);
     }
     if (!ok) QMessageBox::warning(this, "Export", err.isEmpty() ? "Export failed." : err);
     else statusBar()->showMessage("Exported " + path + (canvas_->selection().isEmpty() ? "" : " (selection)"));
