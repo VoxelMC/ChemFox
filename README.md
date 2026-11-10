@@ -2,7 +2,7 @@
 
 # ChemFox
 
-A keyboard-first editor for chemical structures and reaction schemes, built for figures in papers,
+An open-source graphical editor for chemical structures and reaction schemes, built for figures in papers,
 reports and slides. Native on Windows and macOS, works offline. Chemistry by [RDKit](https://www.rdkit.org).
 
 ![A reaction scheme drawn in ChemFox](docs/assets/scheme.png)

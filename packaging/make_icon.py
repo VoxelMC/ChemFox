@@ -179,6 +179,10 @@ stretch, recolour outside the palette, rotate, add effects or redraw the logo.
 |---|---|---|
 | `icon/` | The app icon: the fox on a rounded tile | Store listings, articles, slides, social posts |
 | `mark/` | The fox on its own, transparent background (the nose is cut out) | On photos or coloured backgrounds, small spaces |
+| `banner/` | The fox beside the "chemfox" wordmark on dark, 1200×630 and 2400×1260 | Link previews, headers, social posts |
+
+The wordmark is set in [Rubik](https://fonts.google.com/specimen/Rubik) Medium (500): "chem" in ChemFox
+orange, "fox" in white (or the text colour on light backgrounds).
 
 Every logo comes as **SVG** (vector, any size) and **PNG** (1024, 512 and 256 px).
 
@@ -228,6 +232,10 @@ def press_kit():
             im.save(os.path.join(d, f"{name}-{px}.png"))
     with open(os.path.join(PRESS, "README.md"), "w", encoding="utf-8") as fh:
         fh.write(README)
+    d = os.path.join(PRESS, "banner")
+    os.makedirs(d, exist_ok=True)
+    banner().convert("RGB").save(os.path.join(d, "chemfox-banner-dark-1200x630.png"), optimize=True)
+    banner(2400, 1260).convert("RGB").save(os.path.join(d, "chemfox-banner-dark-2400x1260.png"), optimize=True)
     sheet(os.path.join(PRESS, "overview.png"))
     z = os.path.join(PRESS, "chemfox-press-kit.zip")
     with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -255,8 +263,43 @@ def sheet(path):
     img.save(path)
 
 
+FONT = os.path.join(HERE, "fonts", "Rubik-Variable.ttf")  # the site's font (SIL OFL, see fonts/OFL.txt)
+
+
+def banner(width=1200, height=630, bg=DARK):
+    """The link-preview banner: the white fox (orange nose) beside the "chemfox" wordmark as the site
+    writes it (Rubik 500, "chem" in orange, "fox" in white)."""
+    from PIL import ImageFont
+    ss = 2
+    W, H = width * ss, height * ss
+    img = Image.new("RGBA", (W, H), rgb(bg))
+    mark = render(round(H * 0.36), fox=WHITE, nose=ORANGE, crop=mark_box(pad=0))
+    font = ImageFont.truetype(FONT, round(H * 0.235))
+    font.set_variation_by_axes([500])
+    d = ImageDraw.Draw(img)
+    parts = [("chem", ORANGE), ("fox", WHITE)]
+    widths = [d.textlength(t, font=font) for t, _ in parts]
+    text_w = sum(widths)
+    gap = H * 0.05
+    total = mark.width + gap + text_w
+    x0 = (W - total) / 2
+    img.alpha_composite(mark, (round(x0), round((H - mark.height) / 2)))
+    # Centre the lowercase letters (x-height) on the fox, which reads as optically centred.
+    asc, _ = font.getmetrics()
+    xh = font.getbbox("x")
+    text_mid = (xh[1] + xh[3]) / 2
+    y = H / 2 - text_mid
+    x = x0 + mark.width + gap
+    for (t, colour), w in zip(parts, widths):
+        d.text((x, y), t, font=font, fill=rgb(colour))
+        x += w
+    return img.resize((width, height), Image.LANCZOS)
+
+
 def main():
     app_icons()
+    og = banner()
+    og.convert("RGB").save(os.path.join(ASSETS, "og.png"), optimize=True)
     press_kit()
     print("wrote", ICONS, ASSETS, PRESS)
 
