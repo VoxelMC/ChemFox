@@ -701,22 +701,82 @@ bool alignTo(Molecule& m, const Molecule& ref) {
         if (match.size() < 2) return false;
 
         // Redraw: the shared atoms take the reference's coordinates, the rest is laid out around them.
-        bool hadWedges = stripWedges(*mb.mol);
-        mb.mol->clearConformers();
-        // RDKit's own engine pins the matched atoms exactly (CoordGen only treats them as a guide).
-        RDDepict::generateDepictionMatching2DStructure(*mb.mol, *rb.mol, match, -1, true);
-        if (hadWedges) rederiveWedges(m, mb);
-        for (auto& bd : m.bonds) bd.dbpos = DbPos::Auto;
+        auto attempt = [&](const RDKit::MatchVectType& pins) {
+            Molecule out = m;
+            auto ob = build(out, true);
+            perceiveStereo(*ob.mol);
+            bool hadWedges = stripWedges(*ob.mol);
+            ob.mol->clearConformers();
+            // RDKit's own engine pins the matched atoms exactly (CoordGen only treats them as a guide).
+            RDDepict::generateDepictionMatching2DStructure(*ob.mol, *rb.mol, pins, -1, true);
+            if (hadWedges) rederiveWedges(out, ob);
+            for (auto& bd : out.bonds) bd.dbpos = DbPos::Auto;
+            // Same units as the reference (model * 1.5, y up); keep the molecule where it was on the page.
+            const auto& conf = ob.mol->getConformer();
+            QPointF c0 = out.center();
+            for (auto& a : out.atoms) {
+                auto p = conf.getAtomPos(ob.atomIdx[a.id]);
+                a.setPos(QPointF(p.x, -p.y) / 1.5);
+            }
+            out.translate(c0 - out.center());
+            return out;
+        };
 
-        // Same units as the reference (model * 1.5, y up); keep the molecule where it was on the page.
-        const auto& conf = mb.mol->getConformer();
-        QPointF c0 = m.center();
-        for (auto& a : m.atoms) {
-            auto p = conf.getAtomPos(mb.atomIdx[a.id]);
-            a.setPos(QPointF(p.x, -p.y) / 1.5);
+        // Pinned atoms can force the reference's geometry onto a double bond or stereocentre that differs
+        // in the product (or matches it the other way round). The product's own E/Z and R/S must survive:
+        // unpin the atoms around anything that changed and lay out again; give up rather than change them.
+        const auto stereo = analyze(m).cip;
+        for (int tries = 0; tries < 6 && match.size() >= 2; ++tries) {
+            Molecule out = attempt(match);
+            const auto now = analyze(out).cip;
+            QSet<QString> pinned;
+            for (const auto& [r, mi] : match)
+                for (const auto& a : m.atoms) if (int(mb.atomIdx[a.id]) == mi) pinned.insert(a.id);
+            // Atoms reachable from `start` without crossing the bond start–`not`.
+            auto side = [&](const QString& start, const QString& notVia) {
+                QSet<QString> seen{start};
+                QStringList todo{start};
+                while (!todo.isEmpty()) {
+                    QString x = todo.takeLast();
+                    for (const auto& nb : m.neighbors(x)) {
+                        if ((x == start && nb == notVia) || seen.contains(nb)) continue;
+                        seen.insert(nb);
+                        todo << nb;
+                    }
+                }
+                return seen;
+            };
+            QSet<QString> unpin;
+            for (auto it = stereo.begin(); it != stereo.end(); ++it) {
+                if (now.value(it.key()) == it.value()) continue;
+                QStringList centre;
+                if (const Bond* b = m.bond(it.key())) {
+                    centre = {b->a, b->b};
+                    // A double bond outside a ring: free its whole smaller side (by pinned atoms), so that
+                    // side is laid out in the product's own geometry instead of the reference's.
+                    QSet<QString> sa = side(b->a, b->b), sb = side(b->b, b->a);
+                    if (!sa.contains(b->b)) {
+                        const QSet<QString>& small = QSet<QString>(sa).intersect(pinned).size() <=
+                                                     QSet<QString>(sb).intersect(pinned).size() ? sa : sb;
+                        unpin |= small;
+                    }
+                } else {
+                    centre = {it.key()};
+                }
+                for (const auto& c : centre) {
+                    unpin.insert(c);
+                    for (const auto& nb : m.neighbors(c)) unpin.insert(nb);
+                }
+            }
+            if (unpin.isEmpty()) { m = out; return true; }
+            QSet<int> drop;
+            for (const auto& id : unpin) if (mb.atomIdx.contains(id)) drop.insert(int(mb.atomIdx[id]));
+            const size_t before = match.size();
+            match.erase(std::remove_if(match.begin(), match.end(), [&](const auto& p) { return drop.contains(p.second); }),
+                        match.end());
+            if (match.size() == before) break;  // nothing left to unpin that would help
         }
-        m.translate(c0 - m.center());
-        return true;
+        return false;
     } catch (...) {
         return false;
     }

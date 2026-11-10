@@ -936,7 +936,7 @@ void MainWindow::showKeyReference() {
 <tr><th align=left>Target</th><th align=left>Key</th><th align=left>Action</th></tr>
 <tr><td>Atom</td><td>C N O S P F H</td><td>Change element</td></tr>
 <tr><td>Atom</td><td>l / b / i</td><td>Cl / Br / I</td></tr>
-<tr><td>Atom</td><td>Enter</td><td>Type a label (OMe, CO2Et, NHBoc)</td></tr>
+<tr><td>Atom</td><td>X</td><td>Type a label (OMe, CO2Et, NHBoc)</td></tr>
 <tr><td>Atom</td><td>+ / −</td><td>Increase / decrease charge</td></tr>
 <tr><td>Atom</td><td>.</td><td>Radical</td></tr>
 <tr><td>Atom</td><td>1 / 2 / 3</td><td>Grow a single / double / triple bond</td></tr>

@@ -733,3 +733,36 @@ TEST_CASE("text: whole-line bold and italic; alignment and aromatic display roun
     CHECK(back->molecules[0].aromatic == "circles");
     CHECK(back->texts[0].align == "center");
 }
+
+TEST_CASE("labels: charges keep clear of bonds; group labels colour only their element") {
+    testApp();
+    Style st = styles::resolveNamed("dark");  // atom colours on
+    Renderer r(st);
+    // An alkoxide whose one bond leaves to the top right: the charge must not sit on it.
+    Molecule m = fromSmiles("C[O-]");
+    Atom* o = nullptr;
+    for (auto& a : m.atoms) if (a.el == "O") o = &a;
+    REQUIRE(o);
+    for (auto& a : m.atoms) if (&a != o) a.setPos(o->pos() + QPointF(std::cos(-M_PI / 4), std::sin(-M_PI / 4)));
+    AtomLabel L = r.atomLabel(m, *o, ChemOverlay{});
+    REQUIRE(L.blocks.size() == 2);  // the O, then the charge
+    const QPointF c = r.toPt(o->pos());
+    QPointF charge = L.blocks.back().origin - c;
+    QPointF bond = r.toPt(m.atoms[0].pos()) - c;
+    if (&m.atoms[0] == o) bond = r.toPt(m.atoms[1].pos()) - c;
+    CHECK(geom::dot(geom::unit(charge), geom::unit(bond)) < 0.5);
+    // With no bond in the way it stays top right.
+    Molecule lone = fromSmiles("[OH-]");
+    AtomLabel L2 = r.atomLabel(lone, lone.atoms[0], ChemOverlay{});
+    CHECK(L2.blocks.back().origin.x() > r.toPt(lone.atoms[0].pos()).x());
+
+    // OMe: only the O is red; Me uses the text colour.
+    Molecule ome = fromSmiles("CC");
+    ome.atoms[1].label = "OMe";
+    ome.atoms[1].el = "O";
+    AtomLabel L3 = r.atomLabel(ome, ome.atoms[1], ChemOverlay{});
+    CHECK(L3.splitColor);
+    CHECK(L3.restColor == st.textColor);
+    CHECK(L3.color != st.textColor);
+    CHECK(L3.anchorRight - L3.anchorLeft < r.runsWidth({{"OMe"}}, r.labelFont()) * 0.6);
+}

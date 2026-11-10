@@ -11,6 +11,7 @@
 #include "core/commands/Edits.h"
 #include "editor/Canvas.h"
 #include "io/Native.h"
+#include <QDir>
 #include "warnings/Warnings.h"
 
 #include <QDoubleSpinBox>
@@ -423,4 +424,50 @@ TEST_CASE("snapshot: align products on the report figure") {
     c.zoomToFit();
     QApplication::processEvents();
     c.grab().save(dir + "/align_after.png");
+}
+
+TEST_CASE("align to reactant keeps the product's own E/Z and R/S") {
+    // Photoisomerisation: an (E) reactant, a (Z) product. Copying the reactant's drawing would make it (E).
+    auto e = *chem::fromSmiles("OC(=O)/C=C/c1ccccc1");
+    auto z = *chem::fromSmiles("OC(=O)/C=C\\c1ccccc1");
+    const QString zBefore = chem::smiles(z);
+    CHECK(zBefore.contains('\\'));  // really (Z)
+    REQUIRE(chem::alignTo(z, e));
+    CHECK(chem::smiles(z) == zBefore);
+
+    // SN2 inversion: an (R) reactant, an (S) product, unmapped (shared atoms come from the MCS).
+    auto r = *chem::fromSmiles("C[C@@H](Br)CC");
+    auto s = *chem::fromSmiles("C[C@@H](O)CC");
+    const QString sBefore = chem::smiles(s);
+    const auto cipBefore = chem::analyze(s).cip;
+    REQUIRE(chem::alignTo(s, r));
+    CHECK(chem::smiles(s) == sBefore);
+    CHECK(chem::analyze(s).cip == cipBefore);
+
+    // Both mapped: E reactant to E product keeps E.
+    auto e2 = *chem::fromSmiles("CC(=O)/C=C/c1ccccc1");
+    const QString e2Before = chem::smiles(e2);
+    REQUIRE(chem::alignTo(e2, e));
+    CHECK(chem::smiles(e2) == e2Before);
+}
+
+TEST_CASE("aligning products in the samples never changes an E/Z or R/S label") {
+    // Whatever the sample files contain (they are working files), alignment must keep every stereo label.
+    testApp();
+    QDir dir(CHEMFOX_SOURCE_DIR "/samples");
+    for (const auto& f : dir.entryList({"*.cmfx"})) {
+        auto doc = io::loadFile(dir.filePath(f));
+        REQUIRE(doc);
+        Canvas c;
+        c.setDocument(*doc);
+        QHash<QString, QHash<QString, QString>> before;
+        for (const auto& m : c.doc().molecules) before[m.id] = chem::analyze(m).cip;
+        c.alignAllProducts();
+        for (const auto& m : c.doc().molecules) {
+            auto after = chem::analyze(m).cip;
+            for (auto it = before[m.id].begin(); it != before[m.id].end(); ++it)
+                if (after.value(it.key()) != it.value())
+                    FAIL_CHECK(f.toStdString() << " " << m.id.toStdString() << " " << it.key().toStdString() << ": " << it.value().toStdString() << " -> " << after.value(it.key()).toStdString());
+        }
+    }
 }

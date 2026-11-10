@@ -122,11 +122,18 @@ TEST_CASE("hover and type builds and edits structures") {
     d.key(Qt::Key_AsciiCircum, "^", Qt::ShiftModifier);
     CHECK(d.mol().atoms.size() == 11);
 
-    // Enter on an atom opens the label editor.
+    // Double-clicking an atom doesn't open the label editor; X does.
     Atom tip;
     for (auto& a : d.mol().atoms) if (d.mol().neighbors(a.id).size() == 1) tip = a;
     d.move(d.atomPos(tip));
-    d.key(Qt::Key_Return, "\r");
+    {
+        QMouseEvent dbl(QEvent::MouseButtonDblClick, d.atomPos(tip), d.c.mapToGlobal(d.atomPos(tip)), Qt::LeftButton,
+                        Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&d.c, &dbl);
+        auto* open = d.c.findChild<QLineEdit*>();
+        CHECK((open == nullptr || !open->isVisible()));
+    }
+    d.key(Qt::Key_X, "x");
     auto* le = d.c.findChild<QLineEdit*>();
     REQUIRE(le);
     le->setText("MeO2C");

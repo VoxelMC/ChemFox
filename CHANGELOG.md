@@ -32,6 +32,16 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
   - Empty canvas: Arrange Scheme, Number Compounds, Style, Show Grid, Snap to Grid, Zoom to Fit, Actual Size.
 - A dot grid you can snap moved objects to (View menu, the right-click menu or Preferences). It's never exported.
 
+### Changed
+- X on an atom types a label (it was Enter), and double-clicking an atom no longer opens the label editor.
+  Keys you've rebound yourself are kept.
+- Charges move to a free corner of the atom instead of sitting on a bond.
+- Group labels such as OMe colour only their bonding element when atom colours are on.
+
+### Fixed
+- Align to Reactant / Align Products to Reactants could flip a product's E/Z or R/S. Each product now keeps
+  its own; if that isn't possible, the structure is left as it was.
+
 ## [0.2.1] - 2026-11-10
 
 ### Added

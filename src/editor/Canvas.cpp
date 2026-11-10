@@ -790,7 +790,7 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e) {
     updateHover(e->position());
     Hit h = hover();
     switch (h.kind) {
-    case Hit::AtomHit: editLabel(h.id); break;
+    case Hit::AtomHit: break;  // labels are typed with X (or right-click → Edit Label…), not double-click
     case Hit::BondHit: selected_ = {h.molId}; update(); break;
     case Hit::ArrowHit: editArrow(h.id); break;
     case Hit::TextHit: editText(h.id); break;
