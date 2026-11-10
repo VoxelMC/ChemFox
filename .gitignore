@@ -1,0 +1,14 @@
+﻿# Build output
+build/
+build-mac/
+dist/
+build.log
+ChemFox.cmd
+
+# Editors and OS
+.vs/
+.vscode/
+.idea/
+*.user
+.DS_Store
+Thumbs.db

@@ -1,0 +1,1685 @@
+{
+    "format": "chemdoc",
+    "objects": [
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "N",
+                    "id": "m1_t0",
+                    "label": null,
+                    "x": 2.5684,
+                    "y": 3.2504
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t1",
+                    "label": null,
+                    "x": 3.434,
+                    "y": 2.7498
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t2",
+                    "label": null,
+                    "x": 3.4332,
+                    "y": 1.7497
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t3",
+                    "label": null,
+                    "x": 2.5668,
+                    "y": 1.2504
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t4",
+                    "label": null,
+                    "x": 2.566,
+                    "y": 0.2502
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t5",
+                    "label": null,
+                    "x": 1.6995,
+                    "y": -0.2491
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t6",
+                    "label": null,
+                    "x": 0.8339,
+                    "y": 0.2516
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t7",
+                    "label": null,
+                    "x": 0.8347,
+                    "y": 1.2516
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t8",
+                    "label": null,
+                    "x": 1.7011,
+                    "y": 1.7509
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m1_t9",
+                    "label": null,
+                    "x": 4.3005,
+                    "y": 3.249
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m1_t10",
+                    "label": null,
+                    "x": 5.1661,
+                    "y": 2.7484
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m1_t11",
+                    "label": null,
+                    "x": 4.3013,
+                    "y": 4.2491
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m1_t1",
+                    "b": "m1_t0",
+                    "id": "m1_u0",
+                    "order": 1,
+                    "stereo": "wedge"
+                },
+                {
+                    "a": "m1_t1",
+                    "b": "m1_t2",
+                    "id": "m1_u1",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t2",
+                    "b": "m1_t3",
+                    "id": "m1_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t3",
+                    "b": "m1_t4",
+                    "id": "m1_u3",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t4",
+                    "b": "m1_t5",
+                    "id": "m1_u4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t5",
+                    "b": "m1_t6",
+                    "id": "m1_u5",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t6",
+                    "b": "m1_t7",
+                    "id": "m1_u6",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t7",
+                    "b": "m1_t8",
+                    "id": "m1_u7",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t1",
+                    "b": "m1_t9",
+                    "id": "m1_u8",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t9",
+                    "b": "m1_t10",
+                    "id": "m1_u9",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t9",
+                    "b": "m1_t11",
+                    "id": "m1_u10",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m1_t8",
+                    "b": "m1_t3",
+                    "id": "m1_u11",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m1",
+            "number": "L-phenylalanine",
+            "numberManual": true,
+            "smiles": "N[C@@H](Cc1ccccc1)C(=O)O",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m2_t0",
+                    "label": null,
+                    "x": 18.5979,
+                    "y": 1.4908
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t1",
+                    "label": null,
+                    "x": 17.7302,
+                    "y": 0.9938
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m2_t2",
+                    "label": null,
+                    "x": 17.7266,
+                    "y": -0.0062
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t3",
+                    "label": null,
+                    "x": 16.866,
+                    "y": 1.497
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t4",
+                    "label": null,
+                    "x": 15.9982,
+                    "y": 1
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t5",
+                    "label": null,
+                    "x": 15.134,
+                    "y": 1.5032
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t6",
+                    "label": null,
+                    "x": 14.2662,
+                    "y": 1.0062
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t7",
+                    "label": null,
+                    "x": 13.4021,
+                    "y": 1.5094
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t8",
+                    "label": null,
+                    "x": 13.4055,
+                    "y": 2.5094
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t9",
+                    "label": null,
+                    "x": 14.2734,
+                    "y": 3.0062
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m2_t10",
+                    "label": null,
+                    "x": 15.1374,
+                    "y": 2.503
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m2_t0",
+                    "b": "m2_t1",
+                    "id": "m2_u0",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t1",
+                    "b": "m2_t2",
+                    "id": "m2_u1",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t1",
+                    "b": "m2_t3",
+                    "id": "m2_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t3",
+                    "b": "m2_t4",
+                    "id": "m2_u3",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t4",
+                    "b": "m2_t5",
+                    "id": "m2_u4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t5",
+                    "b": "m2_t6",
+                    "id": "m2_u5",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t6",
+                    "b": "m2_t7",
+                    "id": "m2_u6",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t7",
+                    "b": "m2_t8",
+                    "id": "m2_u7",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t8",
+                    "b": "m2_t9",
+                    "id": "m2_u8",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t9",
+                    "b": "m2_t10",
+                    "id": "m2_u9",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m2_t5",
+                    "b": "m2_t10",
+                    "id": "m2_u10",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m2",
+            "number": "*trans*-cinnamic acid",
+            "numberManual": true,
+            "smiles": "O=C(O)/C=C/c1ccccc1",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m3_t0",
+                    "label": null,
+                    "x": 28.0283,
+                    "y": 9.9877
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t1",
+                    "label": null,
+                    "x": 27.1603,
+                    "y": 9.4907
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m3_t2",
+                    "label": null,
+                    "x": 27.1567,
+                    "y": 8.4907
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t3",
+                    "label": null,
+                    "x": 26.2962,
+                    "y": 9.9939
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t4",
+                    "label": null,
+                    "x": 25.4284,
+                    "y": 9.4969
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t5",
+                    "label": null,
+                    "x": 24.5644,
+                    "y": 10.0001
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t6",
+                    "label": null,
+                    "x": 23.6964,
+                    "y": 9.5031
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t7",
+                    "label": null,
+                    "x": 22.8325,
+                    "y": 10.0063
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t8",
+                    "label": null,
+                    "x": 22.8359,
+                    "y": 11.0063
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m3_t9",
+                    "label": null,
+                    "x": 21.9717,
+                    "y": 11.5093
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t10",
+                    "label": null,
+                    "x": 23.7036,
+                    "y": 11.5033
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m3_t11",
+                    "label": null,
+                    "x": 24.5678,
+                    "y": 11.0001
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m3_t0",
+                    "b": "m3_t1",
+                    "id": "m3_u0",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t1",
+                    "b": "m3_t2",
+                    "id": "m3_u1",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t1",
+                    "b": "m3_t3",
+                    "id": "m3_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t3",
+                    "b": "m3_t4",
+                    "id": "m3_u3",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t4",
+                    "b": "m3_t5",
+                    "id": "m3_u4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t5",
+                    "b": "m3_t6",
+                    "id": "m3_u5",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t6",
+                    "b": "m3_t7",
+                    "id": "m3_u6",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t7",
+                    "b": "m3_t8",
+                    "id": "m3_u7",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t8",
+                    "b": "m3_t9",
+                    "id": "m3_u8",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t8",
+                    "b": "m3_t10",
+                    "id": "m3_u9",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t10",
+                    "b": "m3_t11",
+                    "id": "m3_u10",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m3_t11",
+                    "b": "m3_t5",
+                    "id": "m3_u11",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m3",
+            "number": "*p*-coumaric acid",
+            "numberManual": true,
+            "smiles": "O=C(O)/C=C/c1ccc(O)cc1",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t0",
+                    "label": "CoA",
+                    "x": 42.4604,
+                    "y": 9.4845
+                },
+                {
+                    "charge": 0,
+                    "el": "S",
+                    "id": "m4_t1",
+                    "label": null,
+                    "x": 41.5962,
+                    "y": 9.9877
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t2",
+                    "label": null,
+                    "x": 40.7284,
+                    "y": 9.4907
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m4_t3",
+                    "label": null,
+                    "x": 40.7248,
+                    "y": 8.4907
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t4",
+                    "label": null,
+                    "x": 39.8642,
+                    "y": 9.9939
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t5",
+                    "label": null,
+                    "x": 38.9964,
+                    "y": 9.4969
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t6",
+                    "label": null,
+                    "x": 38.1322,
+                    "y": 9.9999
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t7",
+                    "label": null,
+                    "x": 37.2644,
+                    "y": 9.5031
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t8",
+                    "label": null,
+                    "x": 36.4002,
+                    "y": 10.0063
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t9",
+                    "label": null,
+                    "x": 36.4036,
+                    "y": 11.0063
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m4_t10",
+                    "label": null,
+                    "x": 35.5396,
+                    "y": 11.5093
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t11",
+                    "label": null,
+                    "x": 37.2716,
+                    "y": 11.5031
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m4_t12",
+                    "label": null,
+                    "x": 38.1356,
+                    "y": 10.9999
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m4_t0",
+                    "b": "m4_t1",
+                    "id": "m4_u0",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t1",
+                    "b": "m4_t2",
+                    "id": "m4_u1",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t2",
+                    "b": "m4_t3",
+                    "id": "m4_u2",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t2",
+                    "b": "m4_t4",
+                    "id": "m4_u3",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t4",
+                    "b": "m4_t5",
+                    "id": "m4_u4",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t5",
+                    "b": "m4_t6",
+                    "id": "m4_u5",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t6",
+                    "b": "m4_t7",
+                    "id": "m4_u6",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t7",
+                    "b": "m4_t8",
+                    "id": "m4_u7",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t8",
+                    "b": "m4_t9",
+                    "id": "m4_u8",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t9",
+                    "b": "m4_t10",
+                    "id": "m4_u9",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t9",
+                    "b": "m4_t11",
+                    "id": "m4_u10",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t11",
+                    "b": "m4_t12",
+                    "id": "m4_u11",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m4_t12",
+                    "b": "m4_t6",
+                    "id": "m4_u12",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m4",
+            "number": "*p*-coumaroyl-CoA",
+            "numberManual": true,
+            "smiles": "CC(C)(COP(=O)(O)OP(=O)(O)OC[C@H]1O[C@@H](n2cnc3c(N)ncnc32)[C@H](O)[C@@H]1OP(=O)(O)O)[C@@H](O)C(=O)NCCC(=O)NCCSC(=O)/C=C/c1ccc(O)cc1",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "N",
+                    "id": "m5_t0",
+                    "label": null,
+                    "x": 3.5016,
+                    "y": 15.7504
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t1",
+                    "label": null,
+                    "x": 4.3673,
+                    "y": 15.2498
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t2",
+                    "label": null,
+                    "x": 4.3665,
+                    "y": 14.2497
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t3",
+                    "label": null,
+                    "x": 3.5,
+                    "y": 13.7504
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t4",
+                    "label": null,
+                    "x": 3.4992,
+                    "y": 12.7502
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t5",
+                    "label": null,
+                    "x": 2.6327,
+                    "y": 12.2509
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t6",
+                    "label": null,
+                    "x": 1.7671,
+                    "y": 12.7516
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m5_t7",
+                    "label": null,
+                    "x": 0.9006,
+                    "y": 12.2523
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t8",
+                    "label": null,
+                    "x": 1.7679,
+                    "y": 13.7516
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t9",
+                    "label": null,
+                    "x": 2.6343,
+                    "y": 14.2509
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m5_t10",
+                    "label": null,
+                    "x": 5.2337,
+                    "y": 15.749
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m5_t11",
+                    "label": null,
+                    "x": 6.0994,
+                    "y": 15.2484
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m5_t12",
+                    "label": null,
+                    "x": 5.2345,
+                    "y": 16.7491
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m5_t1",
+                    "b": "m5_t0",
+                    "id": "m5_u0",
+                    "order": 1,
+                    "stereo": "wedge"
+                },
+                {
+                    "a": "m5_t1",
+                    "b": "m5_t2",
+                    "id": "m5_u1",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t2",
+                    "b": "m5_t3",
+                    "id": "m5_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t3",
+                    "b": "m5_t4",
+                    "id": "m5_u3",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t4",
+                    "b": "m5_t5",
+                    "id": "m5_u4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t5",
+                    "b": "m5_t6",
+                    "id": "m5_u5",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t6",
+                    "b": "m5_t7",
+                    "id": "m5_u6",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t6",
+                    "b": "m5_t8",
+                    "id": "m5_u7",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t8",
+                    "b": "m5_t9",
+                    "id": "m5_u8",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t1",
+                    "b": "m5_t10",
+                    "id": "m5_u9",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t10",
+                    "b": "m5_t11",
+                    "id": "m5_u10",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t10",
+                    "b": "m5_t12",
+                    "id": "m5_u11",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m5_t9",
+                    "b": "m5_t3",
+                    "id": "m5_u12",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m5",
+            "number": "L-tyrosine",
+            "numberManual": true,
+            "smiles": "N[C@@H](Cc1ccc(O)cc1)C(=O)O",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m6_t0",
+                    "label": null,
+                    "x": 2.1333,
+                    "y": 26.9655
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m6_t1",
+                    "label": null,
+                    "x": 2.999,
+                    "y": 27.4663
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m6_t2",
+                    "label": null,
+                    "x": 2.9982,
+                    "y": 28.4664
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m6_t3",
+                    "label": null,
+                    "x": 3.8654,
+                    "y": 26.9671
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m6_t4",
+                    "label": null,
+                    "x": 4.7311,
+                    "y": 27.4679
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m6_t5",
+                    "label": null,
+                    "x": 4.7301,
+                    "y": 28.4678
+                },
+                {
+                    "charge": 0,
+                    "el": "S",
+                    "id": "m6_t6",
+                    "label": null,
+                    "x": 5.5973,
+                    "y": 26.9687
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m6_t7",
+                    "label": "CoA",
+                    "x": 6.4628,
+                    "y": 27.4693
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m6_t0",
+                    "b": "m6_t1",
+                    "id": "m6_u0",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t1",
+                    "b": "m6_t2",
+                    "id": "m6_u1",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t1",
+                    "b": "m6_t3",
+                    "id": "m6_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t3",
+                    "b": "m6_t4",
+                    "id": "m6_u3",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t4",
+                    "b": "m6_t5",
+                    "id": "m6_u4",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t4",
+                    "b": "m6_t6",
+                    "id": "m6_u5",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m6_t6",
+                    "b": "m6_t7",
+                    "id": "m6_u6",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m6",
+            "number": "malonyl-CoA",
+            "numberManual": true,
+            "smiles": "CC(C)(COP(=O)(O)OP(=O)(O)OC[C@H]1O[C@@H](n2cnc3c(N)ncnc32)[C@H](O)[C@@H]1OP(=O)(O)O)[C@@H](O)C(=O)NCCC(=O)NCCSC(=O)CC(=O)O",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m7_t0",
+                    "label": null,
+                    "x": 27.6057,
+                    "y": 29.7607
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t1",
+                    "label": null,
+                    "x": 28.4701,
+                    "y": 29.2578
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t2",
+                    "label": null,
+                    "x": 28.4663,
+                    "y": 28.2578
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t3",
+                    "label": null,
+                    "x": 29.3307,
+                    "y": 27.7546
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t4",
+                    "label": null,
+                    "x": 30.1984,
+                    "y": 28.2516
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t5",
+                    "label": null,
+                    "x": 31.0626,
+                    "y": 27.7484
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t6",
+                    "label": null,
+                    "x": 31.9304,
+                    "y": 28.2454
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t7",
+                    "label": null,
+                    "x": 32.7946,
+                    "y": 27.7422
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t8",
+                    "label": null,
+                    "x": 33.6623,
+                    "y": 28.2392
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t9",
+                    "label": null,
+                    "x": 34.5265,
+                    "y": 27.736
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m7_t10",
+                    "label": null,
+                    "x": 35.3943,
+                    "y": 28.233
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t11",
+                    "label": null,
+                    "x": 34.5229,
+                    "y": 26.736
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t12",
+                    "label": null,
+                    "x": 33.6551,
+                    "y": 26.2392
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "m7_t13",
+                    "label": null,
+                    "x": 33.6515,
+                    "y": 25.2393
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t14",
+                    "label": null,
+                    "x": 32.791,
+                    "y": 26.7422
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t15",
+                    "label": null,
+                    "x": 30.202,
+                    "y": 29.2516
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "m7_t16",
+                    "label": null,
+                    "x": 29.3379,
+                    "y": 29.7545
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "m7_t0",
+                    "b": "m7_t1",
+                    "id": "m7_u0",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t1",
+                    "b": "m7_t2",
+                    "id": "m7_u1",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t2",
+                    "b": "m7_t3",
+                    "id": "m7_u2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t3",
+                    "b": "m7_t4",
+                    "id": "m7_u3",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t4",
+                    "b": "m7_t5",
+                    "id": "m7_u4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t5",
+                    "b": "m7_t6",
+                    "id": "m7_u5",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t6",
+                    "b": "m7_t7",
+                    "id": "m7_u6",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t7",
+                    "b": "m7_t8",
+                    "id": "m7_u7",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t8",
+                    "b": "m7_t9",
+                    "id": "m7_u8",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t9",
+                    "b": "m7_t10",
+                    "id": "m7_u9",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t9",
+                    "b": "m7_t11",
+                    "id": "m7_u10",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t11",
+                    "b": "m7_t12",
+                    "id": "m7_u11",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t12",
+                    "b": "m7_t13",
+                    "id": "m7_u12",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t12",
+                    "b": "m7_t14",
+                    "id": "m7_u13",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t4",
+                    "b": "m7_t15",
+                    "id": "m7_u14",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t15",
+                    "b": "m7_t16",
+                    "id": "m7_u15",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t16",
+                    "b": "m7_t1",
+                    "id": "m7_u16",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "m7_t14",
+                    "b": "m7_t7",
+                    "id": "m7_u17",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "caption": "3,5,4′-trihydroxy-*trans*-stilbene",
+            "id": "m7",
+            "number": "resveratrol",
+            "numberManual": true,
+            "smiles": "Oc1ccc(/C=C/c2cc(O)cc(O)c2)cc1",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a8",
+                    "label": "CoA",
+                    "x": 16.8843,
+                    "y": 27.9341
+                },
+                {
+                    "charge": 0,
+                    "el": "S",
+                    "id": "a9",
+                    "label": null,
+                    "x": 16.0187,
+                    "y": 27.4338
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a10",
+                    "label": null,
+                    "x": 15.1526,
+                    "y": 27.9329
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "a11",
+                    "label": null,
+                    "x": 15.152,
+                    "y": 28.9327
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a12",
+                    "label": null,
+                    "x": 14.2872,
+                    "y": 27.4322
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a13",
+                    "label": null,
+                    "x": 13.4208,
+                    "y": 27.9315
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a14",
+                    "label": null,
+                    "x": 12.555,
+                    "y": 27.4298
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a15",
+                    "label": null,
+                    "x": 12.5558,
+                    "y": 26.4312
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a16",
+                    "label": null,
+                    "x": 11.6904,
+                    "y": 25.9288
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a17",
+                    "label": null,
+                    "x": 10.8241,
+                    "y": 26.4298
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "a18",
+                    "label": null,
+                    "x": 9.9583,
+                    "y": 25.9282
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a19",
+                    "label": null,
+                    "x": 10.8235,
+                    "y": 27.4286
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a20",
+                    "label": null,
+                    "x": 11.6888,
+                    "y": 27.9309
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "a8",
+                    "b": "a9",
+                    "id": "b21",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a9",
+                    "b": "a10",
+                    "id": "b22",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a10",
+                    "b": "a11",
+                    "id": "b23",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a10",
+                    "b": "a12",
+                    "id": "b24",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a12",
+                    "b": "a13",
+                    "id": "b25",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a13",
+                    "b": "a14",
+                    "id": "b26",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a14",
+                    "b": "a15",
+                    "id": "b27",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a15",
+                    "b": "a16",
+                    "id": "b28",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a16",
+                    "b": "a17",
+                    "id": "b29",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a17",
+                    "b": "a18",
+                    "id": "b30",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a17",
+                    "b": "a19",
+                    "id": "b31",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a19",
+                    "b": "a20",
+                    "id": "b32",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a20",
+                    "b": "a14",
+                    "id": "b33",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m34",
+            "number": "*p*-coumaroyl-CoA",
+            "numberManual": true,
+            "smiles": "CC(C)(COP(=O)(O)OP(=O)(O)OC[C@H]1O[C@@H](n2cnc3c(N)ncnc32)[C@H](O)[C@@H]1OP(=O)(O)O)[C@@H](O)C(=O)NCCC(=O)NCCSC(=O)/C=C/c1ccc(O)cc1",
+            "type": "molecule"
+        },
+        {
+            "above": "**PAL**",
+            "below": "− NH3",
+            "color": "#2e7d4f",
+            "id": "r1",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 8,
+            "x2": 11.5,
+            "y1": 1.5,
+            "y2": 1.5
+        },
+        {
+            "above": "**C4H**",
+            "below": "cytochrome P450\nO2, NADPH",
+            "color": "#2e7d4f",
+            "id": "r2",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 20.1497,
+            "x2": 23.1527,
+            "y1": 4.8943,
+            "y2": 7.8973
+        },
+        {
+            "above": "**4CL**",
+            "below": "CoA, ATP",
+            "color": "#2e7d4f",
+            "id": "r3",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 29.5,
+            "x2": 33,
+            "y1": 10,
+            "y2": 10
+        },
+        {
+            "above": "**TAL**",
+            "below": "a single step — the P450 is bypassed",
+            "color": "#2e7d4f",
+            "id": "r4",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 7.8955,
+            "x2": 19.3824,
+            "y1": 15.1455,
+            "y2": 12.0676
+        },
+        {
+            "above": "*p*-coumaroyl-CoA",
+            "below": "",
+            "id": "r5",
+            "kind": "forward",
+            "type": "arrow",
+            "via": [
+                [
+                    39,
+                    19.5
+                ],
+                [
+                    21.5,
+                    19.5
+                ]
+            ],
+            "x1": 39,
+            "x2": 21.5,
+            "y1": 14,
+            "y2": 25.5
+        },
+        {
+            "above": "**STS**",
+            "below": "− 3 CO2 · − 4 CoA",
+            "color": "#2e7d4f",
+            "id": "r6",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 18.5,
+            "x2": 24.5,
+            "y1": 27.5,
+            "y2": 27.5
+        },
+        {
+            "id": "t4",
+            "size": 12,
+            "text": "**3 ×**",
+            "type": "text",
+            "x": -2.7019,
+            "y": 27.1166
+        },
+        {
+            "id": "t5",
+            "size": 13,
+            "text": "+",
+            "type": "text",
+            "x": 8.3323,
+            "y": 27.1785
+        }
+    ],
+    "style": "acs",
+    "version": 1,
+    "warnings": {
+        "suppressed": [
+        ],
+        "suppressedInstances": [
+            "W202@r5"
+        ]
+    }
+}

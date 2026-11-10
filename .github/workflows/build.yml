@@ -1,0 +1,121 @@
+# Builds and tests ChemFox on Windows and macOS for every push and pull request.
+# A tag like v0.1.0 also makes the installers and a draft GitHub release with them.
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the version in CMakeLists.txt
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path CMakeLists.txt -Pattern 'project\(ChemFox VERSION (\d+\.\d+\.\d+)').Matches[0].Groups[1].Value
+          if ("v$v" -ne "${{ github.ref_name }}".Split('-')[0]) { throw "Tag ${{ github.ref_name }} doesn't match CMake version $v" }
+
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+          init-shell: powershell
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Inno Setup
+        shell: powershell
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Build and test
+        shell: powershell
+        run: ./build.ps1 -Test -Prefix $env:CONDA_PREFIX -RepoUrl "https://github.com/${{ github.repository }}"
+
+      - name: Package (portable zip and installer)
+        shell: powershell
+        run: ./deploy.ps1 -Installer -Prefix $env:CONDA_PREFIX -RepoUrl "https://github.com/${{ github.repository }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest   # Apple Silicon; add an Intel runner here if testers need one
+    defaults:
+      run:
+        shell: bash -el {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: environment.yml
+          cache-environment: true
+          init-shell: bash
+
+      - name: Build, test, bundle and make the .dmg
+        env:
+          CHEMFOX_REPO_URL: https://github.com/${{ github.repository }}
+          CHEMFOX_TESTS_WARN_ONLY: "1"   # first Mac builds: still produce the .dmg if a test fails
+        run: |
+          chmod +x packaging/macos/build-mac.sh
+          packaging/macos/build-mac.sh "$CONDA_PREFIX"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, macos]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            $0 ~ "^## \\[" v "\\]" { on = 1; next }
+            on && /^## \[/ { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "No CHANGELOG.md section for $version" >&2; exit 1; fi
+          {
+            echo
+            echo "---"
+            echo "**Installing a test build:** the files aren't code-signed yet. On Windows click *More info → Run anyway*;"
+            echo "on macOS right-click ChemFox → *Open* the first time. Details in the README."
+          } >> notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') || contains(github.ref_name, '-') }}
+          name: ChemFox ${{ github.ref_name }}
+          body_path: notes.md
+          files: artifacts/*

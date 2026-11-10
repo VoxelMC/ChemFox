@@ -1,0 +1,56 @@
+﻿name: Bug report
+description: Something doesn't work, looks wrong, or crashed.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for testing ChemFox! A few details help a lot.
+  - type: input
+    id: version
+    attributes:
+      label: ChemFox version
+      description: Help → About ChemFox
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: System
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you see, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Paste CC(=O)O
+        2. Hover the carbonyl and press 1
+        3. ...
+  - type: textarea
+    id: files
+    attributes:
+      label: Files or screenshots
+      description: Drag in the .chemfox file (zip it first if GitHub refuses the extension) and/or a screenshot.
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - Crash or lost work
+        - Wrong chemistry or wrong output
+        - Annoying but I can work around it
+        - Cosmetic

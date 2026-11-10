@@ -1,0 +1,18 @@
+{
+  "format": "chemdoc",
+  "version": 1,
+  "style": "acs",
+  "objects": [
+    {"id": "m1", "type": "molecule", "smiles": "OC(=O)c1ccccc1O"},
+    {"id": "m2", "type": "molecule", "smiles": "CO"},
+    {"id": "m3", "type": "molecule", "smiles": "COC(=O)c1ccccc1O", "caption": "92%"},
+    {"id": "m4", "type": "molecule", "smiles": "COC(=O)c1ccccc1OC(C)=O"},
+    {"id": "m5", "type": "molecule", "smiles": "CC(=O)OC(C)=O"},
+    {"id": "r1", "type": "arrow", "kind": "equilibrium", "above": "H2SO4 (cat.)", "below": "reflux, 4 h"},
+    {"id": "r2", "type": "arrow", "kind": "forward", "above": "pyridine", "below": "CH2Cl2, 0 °C to rt"},
+    {"id": "s1", "type": "scheme", "steps": [
+      {"reactants": ["m1", "m2"], "arrow": "r1", "products": ["m3"]},
+      {"reactants": ["m3"], "agents": ["m5"], "arrow": "r2", "products": ["m4"]}
+    ]}
+  ]
+}

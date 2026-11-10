@@ -1,0 +1,65 @@
+#pragma once
+
+#include <QMainWindow>
+#include "app/Shortcuts.h"
+
+#include <QTimer>
+
+class QComboBox;
+class QLabel;
+class QPlainTextEdit;
+class QTreeWidget;
+class QAction;
+class QMenu;
+class QToolBar;
+class QTextBrowser;
+
+namespace cd {
+
+class Canvas;
+struct Warning;
+
+class MainWindow : public QMainWindow {
+    Q_OBJECT
+public:
+    MainWindow();
+    bool openPath(const QString& path);
+
+protected:
+    void closeEvent(QCloseEvent*) override;
+
+private:
+    void buildMenus();
+    void buildDocks();
+    void newDocument();
+    void open();
+    bool save();
+    bool saveAs();
+    void importStructure();
+    void pasteSmilesDialog();
+    void exportAs(const QString& kind);
+    void showSilenced();
+    void showKeyReference();
+    bool maybeSave();
+    void updateTitle();
+    void updateInfo();
+    void updateWarnings();
+    void syncStyleUi();
+    const Warning* currentWarning() const;
+
+    Canvas* canvas_;
+    QString path_;
+    QTextBrowser* info_;
+    QTreeWidget* warnTree_;
+    QComboBox* styleBox_;
+    QAction* stepLetters_;
+    QMenu* viewMenuDocks_ = nullptr;
+    QMenu* reactionMenu_ = nullptr;
+    QAction* mapModeAction_ = nullptr;
+    QToolBar* toolbar_ = nullptr;
+    ShortcutRegistry shortcuts_;
+    bool syncingStyle_ = false;
+    QString lastStyleSource_;
+};
+
+}  // namespace cd

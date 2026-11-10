@@ -1,0 +1,231 @@
+#pragma once
+// The drawing canvas: zoom/pan, hit-testing, hover state, hover-and-type keys
+// and mouse tools. Owns the document and its undo stack.
+
+#include "core/chem/Chem.h"
+#include "core/commands/Commands.h"
+#include "editor/Keymap.h"
+#include "render/Renderer.h"
+#include "style/Style.h"
+#include "warnings/Warnings.h"
+
+#include <QLineEdit>
+#include <QPointer>
+#include <QUndoStack>
+#include <QWidget>
+#include <functional>
+
+namespace cd {
+
+// A reaction typed as text (reaction builder).
+struct ReactionSpec {
+    QStringList reactants, agents, products;  // one SMILES or SMARTS per structure
+    QString above, below;
+    ArrowKind kind = ArrowKind::Forward;
+    bool autoMap = true;   // map automatically (otherwise use the map numbers typed in)
+    bool showDiff = true;  // colour broken/formed/changed bonds
+};
+
+struct ReactionResult {
+    QString arrowId;
+    QStringList errors;  // per row (reactants, agents, products in order); empty = parsed
+    int mapped = 0;      // atoms carrying a map number in the products
+};
+
+struct Hit {
+    enum Kind { None, AtomHit, BondHit, NumberHit, ArrowHit, TextHit } kind = None;
+    QString id;     // atom, bond, arrow or text id; molecule id for numbers
+    QString molId;  // owning molecule for atoms, bonds, numbers
+    double dist = 0;
+};
+
+class Canvas : public QWidget, public DocumentHost {
+    Q_OBJECT
+public:
+    explicit Canvas(QWidget* parent = nullptr);
+
+    // What a drag on empty canvas does. Hover-and-type keys and dragging from atoms work in every tool.
+    enum class Tool { Select, Chain, Arrow, BentArrow, Text };
+    Tool tool() const { return tool_; }
+    void setTool(Tool t);
+
+    // DocumentHost
+    Document& document() override { return doc_; }
+    void documentReplaced() override;
+
+    const Document& doc() const { return doc_; }
+    QUndoStack* undoStack() { return &undo_; }
+    const Renderer& renderer() const { return renderer_; }
+    const ChemOverlay& overlay() const { return overlay_; }
+    const Style& style() const { return style_; }
+    const std::vector<Warning>& warnings() const { return active_; }
+    const std::vector<Warning>& allWarnings() const { return all_; }
+    QSet<QString> selection() const { return selected_; }
+    Keymap& keymap() { return keymap_; }
+    QPointF modelToScreen(QPointF m) const { return toScreen(renderer_.toPt(m)); }
+
+    // Replace the whole document (open/new); clears undo history.
+    void setDocument(const Document& d);
+    // Run an edit on a copy of the document and push it as one undoable command.
+    void edit(const QString& text, const std::function<void(Document&)>& fn, int mergeKey = -1);
+
+    // Molecule the info panel should describe: hovered, else selected, else none.
+    const Molecule* infoMolecule() const;
+    // Cached chemistry info for a molecule.
+    chem::MolInfo info(const Molecule& m);
+
+    // Commands
+    void cleanStructure();
+    void arrangeScheme();
+    void alignAllProducts();
+    // Named commands for actions that act on the hovered thing or the selection (flip, copy as,
+    // arrow styles…), so the menus and any keyboard shortcut do exactly the same thing.
+    void command(const QString& id);
+    static QStringList commandIds();
+    void reloadKeymap() { keymap_.load(); }
+    void alignToNeighbour(const QString& molId, const QString& refId);
+    void numberCompounds();
+    // Inserted at `at` (model units) when given, else at the cursor or the view centre.
+    void insertMolecules(const std::vector<Molecule>& mols, std::optional<QPointF> at = std::nullopt);
+    void insertSmiles(const QString& smiles, std::optional<QPointF> at = std::nullopt);
+    void selectAll();
+    void deleteSelection();
+    void copy();
+    void cut();
+    void paste();
+    void zoomBy(double factor, QPointF anchor = {});
+    void zoomToFit();
+    void resetZoom();
+    void goTo(const Warning& w);
+    void setStyleName(const QString& name);
+    void setStyleText(const QString& text);
+    void silence(const Warning& w, const QString& scope);  // "instance" | "document" | "global"
+    void refreshWarnings();
+    void setStepLetters(bool on);
+    void setShowMaps(bool on);
+    // Mapping mode: drag from a reactant atom to a product atom to map them; drag an atom
+    // onto empty canvas to unmap it. Map numbers and partners are shown while it is on.
+    bool mapMode() const { return mapMode_; }
+    void setShowPageGuide(bool on) { showPageGuide_ = on; update(); }
+    void setMapMode(bool on);
+
+    // Reaction builder: create (empty arrowId) or replace the step drawn with that arrow.
+    ReactionResult applyReaction(const ReactionSpec& spec, const QString& arrowId, int mergeKey = -1);
+    // The step drawn with an arrow, as text. Map numbers are included when withMaps is set.
+    std::optional<ReactionSpec> reactionFor(const QString& arrowId, bool withMaps) const;
+    // Arrow of the selected reaction: a selected arrow, or the step of a selected molecule.
+    QString selectedArrow() const;
+
+signals:
+    void documentChanged();
+    void infoTargetChanged();
+    void warningsChanged();
+    void styleChanged();
+    void mapModeChanged(bool on);
+    void toolChanged(int tool);
+    void addToReaction(const QString& smiles, int role);  // 0 reactant, 1 reagent, 2 product
+    void status(const QString& text);
+
+protected:
+    void paintEvent(QPaintEvent*) override;
+    void mousePressEvent(QMouseEvent*) override;
+    void mouseMoveEvent(QMouseEvent*) override;
+    void mouseReleaseEvent(QMouseEvent*) override;
+    void mouseDoubleClickEvent(QMouseEvent*) override;
+    void wheelEvent(QWheelEvent*) override;
+    void keyPressEvent(QKeyEvent*) override;
+    void keyReleaseEvent(QKeyEvent*) override;
+    void leaveEvent(QEvent*) override;
+    bool event(QEvent*) override;
+    bool focusNextPrevChild(bool) override { return false; }
+
+private:
+    enum class Drag { None, Pan, BondFromAtom, Chain, Move, Rubber, ArrowHead, ArrowTail, MapLink, DrawArrow,
+                      ArrowCorner, ArrowSegment };
+
+    QPointF toPt(QPointF screen) const { return (screen - pan_) / zoom_; }
+    QPointF toScreen(QPointF pt) const { return pt * zoom_ + pan_; }
+    QPointF toModel(QPointF screen) const { return renderer_.toModel(toPt(screen)); }
+
+    std::vector<Hit> hitTest(QPointF screen) const;
+    void updateHover(QPointF screen);
+    Hit hover() const { return hoverIndex_ < (int)hits_.size() ? hits_[hoverIndex_] : Hit{}; }
+    QString hoverTargetName(const Hit& h) const;
+    void runAction(const QString& action, const Hit& h, QPointF cursorModel);
+    void applyToSelection(const QString& action);
+    void updateStatus();
+
+    void editLabel(const QString& atomId);
+    void editCompound(const QString& molId);
+    void editArrow(const QString& arrowId);
+    void editText(const QString& textId);
+    void startInlineEditor(const QString& initial, QPointF screenPos, std::function<void(const QString&)> done);
+
+    void recompute();
+    void resolveStyle();
+    QString moleculeKey(const Molecule& m) const;
+    QSet<QString> moveSetFor(const Hit& h);
+
+    Document doc_;
+    QUndoStack undo_;
+    Style style_;
+    std::vector<StyleIssue> styleIssues_;
+    Renderer renderer_;
+    ChemOverlay overlay_;
+    QHash<QString, chem::Analysis> analyses_;  // by molecule id
+    QHash<QString, chem::Analysis> analysisCache_;  // by molecule content
+    QHash<QString, chem::MolInfo> infoCache_;
+    std::vector<Warning> all_, active_;
+    QSet<QString> globalSilenced_;
+    Keymap keymap_;
+
+    double zoom_ = 2.0;
+    QPointF pan_{60, 60};
+    QPointF lastMouse_;
+    bool mouseInside_ = false;
+    std::vector<Hit> hits_;
+    int hoverIndex_ = 0;
+    QSet<QString> selected_;
+
+    Drag drag_ = Drag::None;
+    QPointF pressScreen_;
+    QPointF pressModel_;
+    Hit pressHit_;
+    bool dragMoved_ = false;
+    Document dragOrig_;
+    QSet<QString> moveSet_;
+    QPointF lastDragModel_;
+    std::vector<QPointF> preview_;  // model points of a bond/chain preview
+    QRectF rubber_;
+    bool spaceDown_ = false;
+    bool mapMode_ = false;
+    bool showPageGuide_ = false;
+    int dragIndex_ = 0;  // corner or segment of the arrow being reshaped
+    void finishMapLink(QPointF screen);
+    Tool tool_ = Tool::Select;
+    std::vector<QPointF> bentPts_;  // corners of the bent arrow being placed (model units)
+    QPointF bentSnap(QPointF model, bool snap) const;
+    void finishBentArrow();
+    void addTextAt(QPointF model);
+    void showContextMenu(QPointF screen);
+    // The arrow end (tail or head) within a few pixels of a screen point, if any.
+    bool arrowEndAt(QPointF screen, QString* arrowId, bool* head) const;
+    QSet<QString> transformTargets(const Hit& h) const;
+    std::vector<Step> inferredSteps() const;
+    // The structure to line molId up with: its biggest reactant, else its biggest product.
+    QString alignReference(const QString& molId, QString* name = nullptr, bool* isReactant = nullptr) const;
+    struct CleanCycle {
+        QString mol;
+        int undoIndex = -1;
+        int index = 0;
+        int mergeKey = -1;
+        std::vector<Molecule> variants;
+        QStringList names;
+    } cycle_;
+    int cycleSerial_ = 0;
+
+    QPointer<QLineEdit> inline_;
+    QString editingId_;
+};
+
+}  // namespace cd

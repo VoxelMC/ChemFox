@@ -1,0 +1,14 @@
+﻿# Build dependencies for ChemFox, from conda-forge. Same versions on Windows and macOS.
+#   micromamba create -p ../.env -f environment.yml      (or: conda env create -f environment.yml)
+name: chemfox
+channels:
+  - conda-forge
+dependencies:
+  - librdkit-dev=2024.03.6
+  - rdkit=2024.03.6
+  - boost-cpp=1.84
+  - qt6-main=6.12
+  - cmake>=3.24
+  - ninja
+  - catch2=3
+  - pillow          # packaging/make_icon.py

@@ -1,0 +1,21 @@
+ChemFox
+Copyright 2026 Trev and the ChemFox contributors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes software developed by others, used under their own licences.
+Installed copies carry each package's licence text in the "licenses" folder
+(see licenses/THIRD-PARTY.txt for the full list). In particular:
+
+- RDKit: open-source cheminformatics (https://www.rdkit.org), BSD 3-Clause License.
+  Includes the IUPAC/InChI Trust InChI library (InChI Trust licence) and the
+  Schrödinger coordgen layout library (BSD 3-Clause).
+- Qt 6 (https://www.qt.io), used under the GNU Lesser General Public License v3,
+  linked dynamically. The Qt source code is available from https://download.qt.io/
+  and from conda-forge (https://github.com/conda-forge/qt-main-feedstock). You may
+  replace the Qt libraries shipped with ChemFox with your own builds.
+- Boost C++ Libraries (https://www.boost.org), Boost Software License 1.0.
+- FreeType, HarfBuzz, ICU, libpng, libjpeg-turbo, zlib, zstd, PCRE2 and other
+  libraries bundled with Qt, each under its own licence.
+- The Microsoft Visual C++ runtime (Windows builds), redistributed under the
+  Visual Studio redistribution terms.
