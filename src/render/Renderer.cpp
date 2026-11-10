@@ -48,6 +48,129 @@ QPointF clipToRect(QPointF from, QPointF to, const QRectF& r) {
     return from + d * std::clamp(t, 0.0, 1.0);
 }
 
+// A circular arc (or, with sweep 0, a straight line) from p to q: centre c, radius r, starting at angle a0
+// (radians, y down) and turning through `sweep`.
+struct Arc {
+    QPointF p, q, c;
+    double r = 0, a0 = 0, sweep = 0;
+    QPointF at(double t) const {
+        if (sweep == 0) return p + (q - p) * t;
+        const double a = a0 + sweep * t;
+        return c + QPointF(std::cos(a), std::sin(a)) * r;
+    }
+    double length() const { return sweep == 0 ? len(q - p) : r * std::abs(sweep); }
+    QPointF tangent(double t) const {  // unit direction of travel
+        if (sweep == 0) return unit(q - p);
+        const double a = a0 + sweep * t;
+        return QPointF(-std::sin(a), std::cos(a)) * (sweep > 0 ? 1.0 : -1.0);
+    }
+    Arc sub(double t0, double t1) const {
+        Arc s = *this;
+        s.p = at(t0);
+        s.q = at(t1);
+        if (sweep != 0) { s.a0 = a0 + sweep * t0; s.sweep = sweep * (t1 - t0); }
+        return s;
+    }
+    void addTo(QPainterPath& path) const {
+        path.moveTo(p);
+        if (sweep == 0) { path.lineTo(q); return; }
+        // Qt measures angles in degrees, counter-clockwise on screen.
+        path.arcTo(QRectF(c.x() - r, c.y() - r, 2 * r, 2 * r), -a0 * 180 / M_PI, -sweep * 180 / M_PI);
+    }
+    // The arc from p to q whose middle stands `b` times the chord away from it, along the unit normal n.
+    static Arc make(QPointF p, QPointF q, QPointF n, double b) {
+        Arc arc{p, q, {}};
+        const double L = len(q - p);
+        if (L < 1e-9 || std::abs(b) < 1e-4) return arc;
+        const double h = b * L, ah = std::abs(h), sgn = h > 0 ? 1 : -1;
+        arc.r = (L * L / 4 + ah * ah) / (2 * ah);
+        const QPointF apex = (p + q) / 2 + n * h;
+        arc.c = apex - n * (sgn * arc.r);
+        auto ang = [&](QPointF x) { return std::atan2(x.y() - arc.c.y(), x.x() - arc.c.x()); };
+        const double a0 = ang(p), aApex = ang(apex);
+        const double d = std::remainder(ang(q) - a0, 2 * M_PI), alt = d - std::copysign(2 * M_PI, d);
+        auto off = [&](double sw) { return std::abs(std::remainder(a0 + sw / 2 - aApex, 2 * M_PI)); };
+        arc.a0 = a0;
+        arc.sweep = off(d) <= off(alt) ? d : alt;  // the way round that passes through the middle
+        return arc;
+    }
+};
+
+// A cubic Bezier curve.
+struct Cubic {
+    QPointF p0, p1, p2, p3;
+    QPointF at(double t) const {
+        const double u = 1 - t;
+        return p0 * (u * u * u) + p1 * (3 * u * u * t) + p2 * (3 * u * t * t) + p3 * (t * t * t);
+    }
+    QPointF tangent(double t) const {
+        const double u = 1 - t;
+        const QPointF d = (p1 - p0) * (3 * u * u) + (p2 - p1) * (6 * u * t) + (p3 - p2) * (3 * t * t);
+        return len(d) > 1e-9 ? unit(d) : unit(p3 - p0);
+    }
+    double length() const {
+        double l = 0;
+        for (int i = 0; i < 32; ++i) l += len(at((i + 1) / 32.0) - at(i / 32.0));
+        return l;
+    }
+    Cubic sub(double t0, double t1) const {
+        auto split = [](const Cubic& c, double t, bool first) {
+            const QPointF a = c.p0 + (c.p1 - c.p0) * t, b = c.p1 + (c.p2 - c.p1) * t, d = c.p2 + (c.p3 - c.p2) * t;
+            const QPointF ab = a + (b - a) * t, bd = b + (d - b) * t, m = ab + (bd - ab) * t;
+            return first ? Cubic{c.p0, a, ab, m} : Cubic{m, bd, d, c.p3};
+        };
+        if (t1 <= 1e-9) return {p0, p0, p0, p0};
+        const Cubic h = split(*this, t1, true);
+        return split(h, t0 / t1, false);
+    }
+    void addTo(QPainterPath& path) const { path.moveTo(p0); path.cubicTo(p1, p2, p3); }
+};
+
+// The line a mechanism arrow follows: a circular arc (hooks onto an atom's own bond) or a cubic curve.
+struct Curve {
+    bool isArc = true;
+    Arc arc;
+    Cubic cb;
+    Curve() = default;
+    Curve(const Arc& a) : isArc(true), arc(a) {}
+    Curve(const Cubic& c) : isArc(false), cb(c) {}
+    QPointF at(double t) const { return isArc ? arc.at(t) : cb.at(t); }
+    QPointF tangent(double t) const { return isArc ? arc.tangent(t) : cb.tangent(t); }
+    double length() const { return isArc ? arc.length() : cb.length(); }
+    Curve sub(double t0, double t1) const { return isArc ? Curve(arc.sub(t0, t1)) : Curve(cb.sub(t0, t1)); }
+    // The parameter a distance `d` back from the end, measured along the curve (a cubic's parameter doesn't
+    // move at an even pace, so a fraction of its length would land in the wrong place).
+    double tBack(double d) const {
+        const double total = length();
+        if (total < 1e-9) return 0;
+        if (isArc) return std::max(0.0, 1.0 - d / total);
+        double acc = 0, t = 1;
+        QPointF prev = at(1);
+        for (int i = 255; i >= 0 && acc < d; --i) {
+            const double tt = i / 256.0;
+            const QPointF q = at(tt);
+            const double step = len(prev - q);
+            if (acc + step >= d) return tt + (t - tt) * ((acc + step - d) / std::max(step, 1e-12));
+            acc += step;
+            prev = q;
+            t = tt;
+        }
+        return 0;
+    }
+    void addTo(QPainterPath& path) const { if (isArc) arc.addTo(path); else cb.addTo(path); }
+};
+
+// The curve chemists draw from one place to another: it rises a little more steeply off its tail and
+// settles more gently into its head, standing about `h` points off the line between them along n.
+Cubic mechanismCurve(QPointF a, QPointF b, QPointF n, double h) {
+    const QPointF v = b - a;
+    return {a, a + v * 0.22 + n * (1.5 * h), b - v * 0.32 + n * (1.1 * h), b};
+}
+
+// Where the notch of a filled head sits, as a fraction of its length back from the point (the same
+// proportion as reaction arrows).
+constexpr double kNotch = 0.8;
+
 const QColor kHover(66, 133, 244, 110);
 const QColor kSelect(66, 133, 244, 70);
 const QColor kWarn(232, 152, 0);
@@ -121,7 +244,7 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
     const QStringList nbs = m.neighbors(a.id);
     const int deg = nbs.size();
     const bool plain = a.label.isEmpty();
-    if (plain && a.el == "C" && deg > 0 && !m.showCarbons) return L;  // implicit carbon
+    if (plain && a.el == "C" && deg > 0 && !m.showCarbons && a.isotope == 0) return L;  // implicit carbon
     L.visible = true;
 
     const FontSpec f = labelFont();
@@ -146,11 +269,17 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
         if (h > 1) hRuns.push_back({QString::number(h), Script::Sub});
         bool hFirst = deg == 0 ? QStringList{"O", "S", "Se", "F", "Cl", "Br", "I"}.contains(a.el) : flip;
         bool hVertical = deg >= 2 && std::abs(freeDir.y()) > 0.8;
+        // An isotope's mass number sits just before the element, as a superscript (13C, 2H).
+        std::vector<TextRun> iso;
+        if (a.isotope > 0) iso = {{QString::number(a.isotope), Script::Super}};
         if (!hRuns.empty() && !hVertical && hFirst) {
             prefix = hRuns;
-            main = hRuns;
+            prefix.insert(prefix.end(), iso.begin(), iso.end());
+            main = prefix;
             main.push_back({a.el});
         } else {
+            prefix = iso;
+            main = iso;
             main.push_back({a.el});
             if (!hVertical) main.insert(main.end(), hRuns.begin(), hRuns.end());
         }
@@ -168,17 +297,32 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
         main = labels::labelRuns(text);
         if (flip) prefix = labels::labelRuns(text.left(text.size() - anchorTok.size()));
     }
-    if (a.charge != 0) {
-        QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
-                    (a.charge > 0 ? "+" : QString(QChar(0x2212)));
-        main.push_back({q, Script::Super});
-    }
-
     // Position: centre the anchor element on the atom.
     double prefixW = runsWidth(prefix, f);
     double anchorW = runsWidth({{anchorText}}, f);
     QPointF origin(c.x() - prefixW - anchorW / 2, c.y() + cap / 2);
     L.blocks.insert(L.blocks.begin(), {main, origin});
+
+    if (a.charge != 0) {
+        // The charge goes top-right of the label, unless a bond leaves that way: then the first free corner
+        // of top-left, bottom-right, bottom-left (it used to sit on top of such a bond).
+        const QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
+                          (a.charge > 0 ? "+" : QString(QChar(0x2212)));
+        const std::vector<TextRun> qRuns{{q, Script::Super}};
+        const double qw = runsWidth(qRuns, f);
+        const double left = origin.x(), right = origin.x() + runsWidth(main, f);
+        const double top = origin.y() - cap * 0.85, low = origin.y() + cap * 0.15;  // centre heights of the charge
+        const QPointF corners[] = {{right + qw / 2, top}, {left - qw / 2, top}, {right + qw / 2, low}, {left - qw / 2, low}};
+        QPointF centre = corners[0];
+        for (const QPointF& k : corners) {
+            const QPointF dir = unit(k - c);
+            bool clear = true;
+            for (const auto& nb : nbs) clear &= dot(unit(toPt(m.atom(nb)->pos()) - c), dir) < std::cos(M_PI * 40 / 180);
+            if (clear) { centre = k; break; }
+        }
+        // A superscript's centre sits about (qw/2, 0.85 cap) up and right of its block origin.
+        L.blocks.push_back({qRuns, centre - QPointF(qw / 2, -cap * 0.85)});
+    }
 
     const double mg = s_.margin;
     L.clip = QRectF(origin.x() + prefixW - mg, c.y() - cap / 2 - mg, anchorW + 2 * mg, cap + 2 * mg);
@@ -189,6 +333,13 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
     }
     L.bounds = bounds;
     L.color = plain ? elementColor(a.el) : elementColor(anchorText);
+    if (!plain && L.color != s_.textColor) {
+        // Only the anchor element (the O of OMe) takes the element colour; Me stays in the text colour.
+        L.splitColor = true;
+        L.anchorLeft = origin.x() + prefixW;
+        L.anchorRight = L.anchorLeft + anchorW;
+        L.restColor = s_.textColor;
+    }
     return L;
 }
 
@@ -298,8 +449,76 @@ QRectF Renderer::moleculeRect(const Molecule& m, const ChemOverlay& ov) const {
         r = r.isNull() ? ar : r.united(ar);
         AtomLabel L = atomLabel(m, a, ov);
         if (L.visible) r = r.united(L.bounds);
+        if (a.lonePairs > 0) {
+            const double k = s_.fontSize * 0.3;
+            for (const auto& q : lonePairPoints(m, a, ov)) r = r.united(QRectF(q - QPointF(k, k), QSizeF(2 * k, 2 * k)));
+        }
     }
     return r;
+}
+
+std::vector<QPointF> Renderer::lonePairPoints(const Molecule& m, const Atom& a, const ChemOverlay& ov) const {
+    std::vector<QPointF> out;
+    if (a.lonePairs <= 0) return out;
+    const QPointF c = toPt(a.pos());
+    const AtomLabel L = atomLabel(m, a, ov);
+    // The side the label writes its hydrogens (or the rest of a group) on is taken, like a bond: OH puts its
+    // pairs above and below the O, not out past the H.
+    std::vector<QPointF> taken;
+    if (L.visible) {
+        const double more = s_.fontSize * 0.4;  // a written H or group, not a charge or the box's own slack
+        if (L.bounds.left() < L.clip.left() - more) taken.push_back({-1, 0});
+        if (L.bounds.right() > L.clip.right() + more) taken.push_back({1, 0});
+    }
+    std::vector<QPointF> dirs = lonePairDirections(m, a.id, a.lonePairs, taken);
+    if (m.neighbors(a.id).isEmpty() && L.visible) {
+        // A lone atom: keep off the side its hydrogens are written on (HO⁻ has its H on the left).
+        const bool textLeft = (c.x() - L.bounds.left()) > (L.bounds.right() - c.x()) + 1;
+        std::vector<QPointF> order = {{0, -1}, {0, 1}};
+        if (textLeft) order.insert(order.end(), {{1, 0}, {-1, 0}});
+        else order.insert(order.end(), {{-1, 0}, {1, 0}});
+        dirs.clear();
+        for (int i = 0; i < a.lonePairs; ++i) dirs.push_back(order[i % 4]);
+    }
+    if (!L.visible && a.charge != 0 && !m.neighbors(a.id).isEmpty()) {
+        // The charge sits in the widest gap: lay out one pair more and leave out the one nearest it.
+        const QPointF fd = freeDirection(m, a.id);
+        dirs = lonePairDirections(m, a.id, a.lonePairs + 1);
+        auto nearest = std::max_element(dirs.begin(), dirs.end(), [&](QPointF p1, QPointF p2) { return dot(p1, fd) < dot(p2, fd); });
+        dirs.erase(nearest);
+    }
+    if (L.visible && !m.neighbors(a.id).isEmpty()) {
+        // On a lettered atom the pairs sit square to the letter, above, below or beside it (as drawn by hand),
+        // each on the free side nearest where the gaps put it.
+        std::vector<QPointF> blocked = taken;
+        for (const auto& nb : m.neighbors(a.id)) blocked.push_back(unit(m.atom(nb)->pos() - a.pos()));
+        const QPointF sides[] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+        std::vector<QPointF> used;
+        for (auto& dir : dirs) {
+            QPointF pick = dir;
+            double bestDot = -2;
+            for (const auto& sd : sides) {
+                bool free = true;
+                for (const auto& b : blocked) free &= dot(sd, b) < 0.8;
+                for (const auto& u2 : used) free &= dot(sd, u2) < 0.5;
+                if (free && dot(sd, dir) > bestDot) { bestDot = dot(sd, dir); pick = sd; }
+            }
+            if (bestDot > -2) dir = pick;
+            used.push_back(dir);
+        }
+    }
+    for (const auto& dir : dirs) {
+        // Against the element itself (the O of OH, not the whole label), clear of the rest of the label;
+        // a little way off a bare atom.
+        if (L.visible && L.clip.contains(c)) {
+            QPointF q = clipToRect(c, c + dir * 1000.0, L.clip) + dir * (s_.fontSize * 0.12);
+            for (int i = 0; i < 12 && L.bounds.contains(q) && !L.clip.contains(q); ++i) q += dir * (s_.fontSize * 0.1);
+            out.push_back(q);
+        } else {
+            out.push_back(c + dir * (s_.bondLength * 0.3));
+        }
+    }
+    return out;
 }
 
 QRectF Renderer::numberRect(const Molecule& m, const ChemOverlay& ov) const {
@@ -326,7 +545,8 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
     // Aromatic circles replace alternating double bonds when the style asks for them.
     QSet<QString> circleBonds;
     std::vector<QStringList> circles;
-    if (s_.aromaticCircles) {
+    const bool useCircles = m.aromatic.isEmpty() ? s_.aromaticCircles : m.aromatic == "circles";
+    if (useCircles) {
         for (const auto& ring : ov.aromaticRings.value(m.id)) {
             circles.push_back(ring);
             for (int i = 0; i < ring.size(); ++i)
@@ -454,7 +674,25 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
     for (const auto& a : m.atoms) {
         const AtomLabel& L = labelMap[a.id];
         if (L.visible) {
-            for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+            if (!L.splitColor) {
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+            } else {
+                // Draw the label twice, clipped: the anchor element's column in its colour, the rest plain.
+                const QRectF all = L.bounds.adjusted(-f.size, -f.size, f.size, f.size);
+                const QRectF anchor(L.anchorLeft, all.top(), L.anchorRight - L.anchorLeft, all.height());
+                p.save();
+                p.setClipRect(anchor, Qt::IntersectClip);
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+                p.restore();
+                p.save();
+                QPainterPath restPath;
+                restPath.addRect(all);
+                QPainterPath anchorPath;
+                anchorPath.addRect(anchor);
+                p.setClipPath(restPath.subtracted(anchorPath), Qt::IntersectClip);
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.restColor);
+                p.restore();
+            }
         } else if (a.charge != 0) {
             QPointF fd = freeDirection(m, a.id);
             QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
@@ -474,6 +712,18 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
             for (int i = 0; i < a.radical; ++i) {
                 double dx = (i - (a.radical - 1) / 2.0) * s_.fontSize * 0.3;
                 p.drawEllipse(at + QPointF(dx, 0), s_.fontSize * 0.1, s_.fontSize * 0.1);
+            }
+        }
+        if (a.lonePairs > 0) {
+            // Two dots side by side, facing away from the atom.
+            const QPointF c = toPt(a.pos());
+            p.setPen(Qt::NoPen);
+            p.setBrush(L.visible ? L.color : s_.textColor);
+            const double r = s_.fontSize * 0.085, half = s_.fontSize * 0.17;
+            for (const auto& q : lonePairPoints(m, a, ov)) {
+                const QPointF side = perp(unit(q - c)) * half;
+                p.drawEllipse(q + side, r, r);
+                p.drawEllipse(q - side, r, r);
             }
         }
     }
@@ -519,16 +769,19 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
 // Arrows
 
 QString Renderer::stepLetter(const Document& d, const QString& arrowId) const {
+    // Arrows whose letter is hidden are skipped, so the rest still run a, b, c…
+    auto hidden = [&](const QString& id) { const Arrow* a = d.arrow(id); return a && a->hideLetter; };
+    if (hidden(arrowId)) return {};
     int i = 0;
     for (const auto& s : d.schemes)
         for (const auto& st : s.steps) {
             if (st.arrow == arrowId) return QString(QChar('a' + i % 26));
-            ++i;
+            if (!hidden(st.arrow)) ++i;
         }
     i = 0;
     for (const auto& a : d.arrows) {
         if (a.id == arrowId) return QString(QChar('a' + i % 26));
-        ++i;
+        if (!a.hideLetter) ++i;
     }
     return {};
 }
@@ -743,6 +996,375 @@ void Renderer::drawArrow(QPainter& p, const Arrow& a, const Document& d, const D
     }
 }
 
+// ---------------------------------------------------------------------------
+// Mechanism arrows
+
+CurvedGeom Renderer::curvedGeom(const CurvedArrow& c, const Document& d, const ChemOverlay& ov) const {
+    CurvedGeom g;
+    QPointF ma, mb;
+    if (!d.resolve(c.from, &ma) || !d.resolve(c.to, &mb)) return g;
+
+    // Each end: where it attaches, and how far the arrow stops short of it.
+    // Where an end attaches; how far it stops short (a gap, or a label's box); for a bare atom, the lines
+    // its bonds draw there, which the end keeps `clearance` from.
+    struct End { QPointF p; double gap = 0; QRectF clip; std::vector<QLineF> avoid; double clearance = 0; double maxReach = 0; };
+    auto bondLines = [&](const Molecule& m, const QString& atomId) {
+        std::vector<QLineF> out;
+        const double sp = s_.spacingPt();
+        for (const auto* bd : m.bondsOf(atomId)) {
+            const QPointF pa = toPt(m.atom(bd->a)->pos()), pb = toPt(m.atom(bd->b)->pos());
+            const QPointF nb = perp(unit(pb - pa));
+            std::vector<double> offs{0};
+            if (bd->order == 2) {
+                const int side = doubleBondSide(m, *bd);
+                offs = side == 0 ? std::vector<double>{-sp / 2, sp / 2} : std::vector<double>{0, side * sp};
+            } else if (bd->order >= 3) {
+                offs = {-sp, 0, sp};
+            }
+            for (double o : offs) out.emplace_back(pa + nb * o, pb + nb * o);
+        }
+        return out;
+    };
+    auto end = [&](const CurvedEnd& e, QPointF model, QPointF other) {
+        End out{toPt(model)};
+        if (!e.atom.isEmpty()) {
+            const Molecule* m = d.moleculeOfAtom(e.atom);
+            const Atom* a = m->atom(e.atom);
+            if (e.lonePair && a->lonePairs > 0) {
+                // The lone pair that faces the other end.
+                double best = -2;
+                for (const auto& q : lonePairPoints(*m, *a, ov)) {
+                    double facing = dot(unit(q - out.p), unit(other - out.p));
+                    if (facing > best) { best = facing; out.gap = s_.fontSize * 0.3; out.clip = {}; g.ok = true; g.a = q; }
+                }
+                out.p = g.a;
+                return out;
+            }
+            const AtomLabel L = atomLabel(*m, *a, ov);
+            if (L.visible) out.clip = L.clip.adjusted(-1, -1, 1, 1);
+            else {
+                out.gap = s_.bondLength * 0.2;
+                out.avoid = bondLines(*m, a->id);  // and clear of the lines its bonds draw (both of a double bond)
+                out.maxReach = s_.bondLength * 0.4;
+            }
+        } else if (!e.bond.isEmpty()) {
+            const Bond* b = d.moleculeOfBond(e.bond)->bond(e.bond);
+            out.gap = b->order > 1 ? std::max(s_.bondLength * 0.14, s_.spacingPt() * 1.2) : s_.bondLength * 0.14;
+        }
+        return out;
+    };
+    End B = end(c.to, mb, toPt(ma));
+    End A = end(c.from, ma, B.p);
+    g.anchorFrom = toPt(ma);  // what a hand-set shape's ends are measured from
+    g.anchorTo = toPt(mb);
+    B.clearance = s_.mechanismHeadWidth() * 0.9 + 0.6;  // the head's barbs, not just its point
+    A.clearance = s_.mechanismWidth() + 0.6;
+    QPointF v = B.p - A.p;
+    double L = len(v);
+    if (L < 1e-6) { g.ok = false; return g; }
+    const QPointF n0 = perp(v / L);  // the curve's sides are measured against this
+
+    // Which side it bulges to: as set by hand, else the side with fewer atoms in the way.
+    double side = 1;
+    if (c.manual) {
+        side = c.bulge < 0 ? -1 : 1;
+    } else {
+        QSet<QString> seen;
+        std::vector<QPointF> atoms;
+        for (const CurvedEnd* e : {&c.from, &c.to}) {
+            const Molecule* m = !e->atom.isEmpty() ? d.moleculeOfAtom(e->atom) : !e->bond.isEmpty() ? d.moleculeOfBond(e->bond) : nullptr;
+            if (!m || seen.contains(m->id)) continue;
+            seen.insert(m->id);
+            for (const auto& a : m->atoms) atoms.push_back(toPt(a.pos()));
+        }
+        auto crowding = [&](QPointF apex) {
+            double sum = 0;
+            const double soft = 0.3 * s_.bondLength;
+            for (const auto& q : atoms) sum += 1.0 / (dot(q - apex, q - apex) + soft * soft);
+            return sum;
+        };
+        const QPointF mid0 = (A.p + B.p) / 2;
+        const double h0 = 0.6 * s_.bondLength;
+        const double minus = crowding(mid0 - n0 * h0), plus = crowding(mid0 + n0 * h0);
+        if (std::abs(plus - minus) <= 1e-3 * std::max(plus, minus)) side = n0.y() <= 0 ? 1 : -1;  // a tie: above
+        else side = minus < plus ? -1 : 1;
+    }
+
+    // An arrow from a bond to one of its own atoms (C–Br to Br, C=O to O), or from an atom to a bond of its
+    // own, is drawn the way it is by hand: up off the middle of the bond, over, and down onto the top of the
+    // atom. Aimed straight at the atom it would be shorter than its own head.
+    auto ownAtom = [&](const CurvedEnd& atomEnd, const CurvedEnd& bondEnd) {
+        if (atomEnd.atom.isEmpty() || bondEnd.bond.isEmpty()) return false;
+        const Molecule* m = d.moleculeOfBond(bondEnd.bond);
+        return m && m->bond(bondEnd.bond)->has(atomEnd.atom);
+    };
+    const bool hopTo = ownAtom(c.to, c.from), hopFrom = !hopTo && ownAtom(c.from, c.to);
+    const bool hop = hopTo || hopFrom;
+    const double bl = s_.bondLength;
+    Curve full;
+    // A shape set by hand: the ends where they were put (offset from what they're attached to), the curve
+    // through its two control points. Drawn exactly as set; nothing is trimmed or aimed.
+    if (c.shaped) {
+        const QPointF P0 = toPt(ma + c.fromOff), P3 = toPt(mb + c.toOff);
+        full = Cubic{P0, P0 + c.c1 * bl, P3 + c.c2 * bl, P3};
+        A = End{P0};
+        B = End{P3};
+    } else if (hop) {
+        const End& atomE = hopTo ? B : A;
+        const QPointF X = toPt(hopTo ? mb : ma), M = toPt(hopTo ? ma : mb);  // the atom, the bond's middle
+        const QPointF u = unit(X - M);                                     // along the bond, toward the atom
+        const QPointF lc = atomE.clip.isNull() ? atomE.p : atomE.clip.center();
+        auto insideLabel = [&](QPointF q) {
+            if (atomE.clip.isNull()) return len(q - X) < std::max(atomE.gap, 0.28 * bl);
+            const QPointF k = q - lc;
+            const double ea = atomE.clip.width() / 2 + 0.4, eb = atomE.clip.height() / 2 + 0.4;
+            return (k.x() / ea) * (k.x() / ea) + (k.y() / eb) * (k.y() / eb) < 0.999;
+        };
+        // Two arrows from one bond (a homolysis) both start at its middle; otherwise, where the label covers
+        // the middle, the tail slides along the bond toward the other atom to the part that is drawn.
+        bool shared = false;
+        for (const auto& o : d.curved)
+            shared |= o.id != c.id && !c.from.bond.isEmpty() && o.from.bond == c.from.bond;
+        // A starting shape for a hook (drag its handles to change it): an arc that leaves the bond beside its
+        // drawn part, swings out, and comes down onto the edge of the atom's label pointing into it. Each
+        // candidate is the exact circle through the tail S with a start direction that also passes through a
+        // point T on the label's edge; the best-aimed of a comfortable size and turn wins. Returns its score.
+        auto searchSide = [&](double sd, Arc& out) {
+            const QPointF ns = n0 * sd;
+            // The tail clears every line the bond draws on its side: the second line of a double bond (when
+            // that's this side, or half a spacing for a centred one), both outer lines of a triple bond.
+            double clearLines = 0;
+            const CurvedEnd& bondEnd = hopTo ? c.from : c.to;
+            if (const Molecule* bm = d.moleculeOfBond(bondEnd.bond)) {
+                const Bond* bb = bm->bond(bondEnd.bond);
+                const QPointF nb = perp(unit(bm->atom(bb->b)->pos() - bm->atom(bb->a)->pos()));
+                const double sp = s_.spacingPt();
+                if (bb->order >= 3) clearLines = sp;
+                else if (bb->order == 2) {
+                    const int dbSide = doubleBondSide(*bm, *bb);
+                    if (dbSide == 0) clearLines = sp / 2;
+                    else if ((dbSide > 0) == (dot(nb, ns) > 0)) clearLines = sp;
+                }
+            }
+            const double off = clearLines + 0.07 * bl;
+            QPointF onBond = M;
+            for (int i = 0; i < 12 && !shared && insideLabel(onBond + ns * off); ++i) onBond -= u * (0.04 * bl);
+            QPointF S = onBond + ns * off;
+            for (int i = 0; i < 20 && insideLabel(S); ++i) S += ns * (0.04 * bl);
+            const double ea = atomE.clip.isNull() ? std::max(atomE.gap, 0.28 * bl) : atomE.clip.width() / 2 + 0.4;
+            const double eb = atomE.clip.isNull() ? ea : atomE.clip.height() / 2 + 0.4;
+            out = Arc::make(S, lc + ns * eb, ns, 0.5);  // fallback (nothing fits): onto the top of the label
+            double best = 1e9, loose = 1e9;
+            Arc looseArc = out;
+            const double hl = s_.mechanismHeadLength();
+            for (int il = shared ? 0 : -15; il <= 12; ++il) {
+                const double lean = il * M_PI / 36;  // -75° (swinging out first) to 60° toward the atom
+                const QPointF t0 = unit(ns * std::cos(lean) + u * std::sin(lean));
+                QPointF nt = perp(t0);
+                if (dot(nt, u) < 0) nt = -nt;  // the circle turns toward the atom
+                for (int ip = 0; ip < 72; ++ip) {
+                    const double psi = ip * M_PI / 36;
+                    const QPointF T = lc + QPointF(ea * std::cos(psi), eb * std::sin(psi));
+                    if (dot(T - X, ns) < 0) continue;  // land on the curve's side of the label
+                    const QPointF w = T - S;
+                    const double k = dot(nt, w);
+                    if (k < 1e-6) continue;
+                    const double R = dot(w, w) / (2 * k);
+                    if (R < 0.22 * bl || R > 0.75 * bl) continue;
+                    const QPointF C = S + nt * R;
+                    const double aS = std::atan2(S.y() - C.y(), S.x() - C.x()), aT = std::atan2(T.y() - C.y(), T.x() - C.x());
+                    const double dir = dot(QPointF(-std::sin(aS), std::cos(aS)), t0) > 0 ? 1 : -1;
+                    double sw = std::remainder(aT - aS, 2 * M_PI);
+                    if (dir > 0 && sw < 0) sw += 2 * M_PI;
+                    if (dir < 0 && sw > 0) sw -= 2 * M_PI;
+                    const double turn = std::abs(sw) * 180 / M_PI;
+                    if (turn < 70 || turn > 290) continue;
+                    bool clear = true;  // it mustn't cut through the label on the way
+                    for (int j = 1; j < 24 && clear; ++j) {
+                        const double a = aS + sw * j / 24.0;
+                        clear = !insideLabel(C + QPointF(std::cos(a), std::sin(a)) * R);
+                    }
+                    if (!clear) continue;
+                    // The head's aim, as drawn: along the arc where the line meets it.
+                    const double notch = kNotch * std::min(hl, 0.9 * R);
+                    const double an = aT - dir * notch / R;
+                    const QPointF headDir = QPointF(-std::sin(an), std::cos(an)) * dir;
+                    if (dot(headDir, X - T) <= 0) continue;
+                    const double miss = std::abs(cross(headDir, X - T));
+                    if (miss > 0.6 * bl) continue;
+                    const QPointF across = perp(headDir);
+                    const double reachAcross = std::sqrt((ea * across.x()) * (ea * across.x()) + (eb * across.y()) * (eb * across.y()));
+                    const bool intoLabel = miss < std::max(reachAcross - 2.2, 0.15 * bl);
+                    const double score = miss / (0.2 * bl) + (lean < 0 ? 0.8 * -lean : 0.4 * std::abs(lean - M_PI / 12)) +
+                                         3.0 * std::abs(R - 0.3 * bl) / bl + 0.004 * std::max(0.0, turn - 230) +
+                                         0.003 * std::max(0.0, 110 - turn);
+                    if (intoLabel && score < best) { best = score; out = Arc{S, T, C, R, aS, sw}; }
+                    if (score < loose) { loose = score; looseArc = Arc{S, T, C, R, aS, sw}; }
+                }
+            }
+            if (best > 1e8 && loose < 1e8) { out = looseArc; best = loose + 1.0; }
+            return best;
+        };
+        Arc arc;
+        double best = searchSide(side, arc);
+        if (!c.manual && !shared) {
+            Arc other;
+            // The other side wins only if it aims clearly better (the emptier side is the default).
+            if (searchSide(-side, other) + 0.15 < best) { arc = other; side = -side; }
+        }
+        if (hopFrom) {  // the same curve, travelled the other way
+            Arc rev = arc;
+            rev.p = arc.q;
+            rev.q = arc.p;
+            rev.a0 = arc.a0 + arc.sweep;
+            rev.sweep = -arc.sweep;
+            arc = rev;
+        }
+        full = arc;
+        const double chord = len(arc.q - arc.p);
+        const double h = chord > 1e-6 ? dot(arc.at(0.5) - (arc.p + arc.q) / 2, n0) / chord : side * 0.5;
+        g.bulge = std::copysign(0.5, h);
+        A.p = arc.p; A.clip = {}; A.gap = 0; A.avoid.clear();
+        B.p = arc.q; B.clip = {}; B.gap = 0; B.avoid.clear();
+    }
+    g.a = A.p;
+    g.b = B.p;
+    v = g.b - g.a;
+    L = len(v);
+    if (L < 1e-6) { g.ok = false; return g; }
+    g.ok = true;
+    g.normal = n0;
+    if (!hop && !c.shaped) {
+        // A standard height, a little rounder for short arrows.
+        const double h = std::min(std::clamp(0.3 * L, 0.45 * bl, 0.9 * bl), 0.55 * L);
+        g.bulge = c.manual ? std::clamp(c.bulge, -0.9, 0.9) : side * h / L;
+        full = mechanismCurve(g.a, g.b, n0, g.bulge * L);
+    }
+
+    auto outside = [](const End& e, QPointF q) {
+        if (!e.clip.isNull()) {
+            const QPointF k = q - e.clip.center();
+            const double a = e.clip.width() / 2, b = e.clip.height() / 2;
+            // An ellipse in the label's box: corners of the box are empty space, not label.
+            return (k.x() / a) * (k.x() / a) + (k.y() / b) * (k.y() / b) >= 1;
+        }
+        const double d0 = len(q - e.p);
+        if (d0 < e.gap) return false;
+        if (!e.avoid.empty() && d0 > e.maxReach) return true;  // never so far back that it floats free of the atom
+        for (const auto& l : e.avoid)
+            if (distToSegment(q, l.p1(), l.p2()) < e.clearance) return false;
+        return true;
+    };
+    const int steps = 200;
+    int i0 = 0, i1 = steps;
+    while (i0 < steps && !outside(A, full.at(double(i0) / steps))) ++i0;
+    while (i1 > 0 && !outside(B, full.at(double(i1) / steps))) --i1;
+    if (i0 >= i1) { i0 = 0; i1 = steps; }  // the ends overlap: draw it whole rather than nothing
+    const Curve q = full.sub(double(i0) / steps, double(i1) / steps);
+    g.start = q.at(0);
+    g.tip = q.at(1);
+    g.isArc = q.isArc;
+    if (q.isArc) {
+        g.centre = q.arc.c;
+        g.radius = q.arc.r;
+        g.angle0 = q.arc.a0;
+        g.sweep = q.arc.sweep;
+    } else {
+        g.c1 = q.cb.p1;
+        g.c2 = q.cb.p2;
+    }
+    // A head never takes more than a third of a short arrow, or so much of a tight arc that it bends off it.
+    const double arcLen = q.length();
+    const double shrink = std::min({1.0, arcLen * 0.33 / s_.mechanismHeadLength(),
+                                    !q.isArc || q.arc.sweep == 0 ? 1.0 : q.arc.r * 0.9 / s_.mechanismHeadLength()});
+    g.headLength = s_.mechanismHeadLength() * shrink;
+    g.headWidth = s_.mechanismHeadWidth() * std::max(shrink, 0.8);
+    // The line stops at the head's notch, and the head carries straight on from there.
+    const double notch = g.headLength * kNotch;
+    const double tn = arcLen > 1e-9 ? q.tBack(notch) : 0.0;
+    // The head carries on straight from where the line ends (its notch), so line and head meet without a
+    // kink; its point lands a hair off the arc's end, which nobody can see.
+    g.tipDir = arcLen > 1e-9 ? q.tangent(tn) : unit(v);
+    g.notch = q.at(tn);
+    g.headTip = g.notch + g.tipDir * std::min(notch, arcLen);
+    g.apex = full.at(0.5);
+    QRectF r;
+    for (int i = 0; i <= 32; ++i) {
+        g.points.push_back(q.at(i / 32.0));
+        r |= QRectF(g.points.back(), QSizeF(0.01, 0.01));
+    }
+    const double pad = s_.mechanismHeadWidth() + 1;
+    g.bounds = r.adjusted(-pad, -pad, pad, pad);
+    return g;
+}
+
+void Renderer::drawCurved(QPainter& p, const CurvedArrow& c, const Document& d, const ChemOverlay& ov,
+                          const Decorations* deco) const {
+    const CurvedGeom g = curvedGeom(c, d, ov);
+    if (!g.ok) return;
+    const Curve q = g.isArc ? Curve(Arc{g.start, g.tip, g.centre, g.radius, g.angle0, g.sweep})
+                            : Curve(Cubic{g.start, g.c1, g.c2, g.tip});
+    const double hl = g.headLength, hw = g.headWidth, lw = s_.mechanismWidth();
+    const bool hov = deco && deco->hoverId == c.id, sel = deco && deco->selected.contains(c.id);
+    if (hov || sel) {
+        QPainterPath whole;
+        q.addTo(whole);
+        p.setPen(QPen(hov ? kHover : kSelect, std::max(hw * 3.0, 5.0), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+        p.setBrush(Qt::NoBrush);
+        p.drawPath(whole);
+        // Handles: round ends (drag to move or re-attach), and the curve's two control points on thin lines from
+        // their ends, as in other drawing programs (drag to shape it).
+        const QColor blue(66, 133, 244);
+        const double r = std::max(hw * 0.6, 1.8);
+        if (!g.isArc) {
+            QPen guide(blue, 0.5);
+            guide.setDashPattern({2, 2});
+            p.setPen(guide);
+            p.drawLine(g.start, g.c1);
+            p.drawLine(g.tip, g.c2);
+            p.setPen(QPen(blue, 0.8));
+            p.setBrush(blue);
+            p.drawRect(QRectF(g.c1 - QPointF(r * 0.8, r * 0.8), QSizeF(1.6 * r, 1.6 * r)));
+            p.drawRect(QRectF(g.c2 - QPointF(r * 0.8, r * 0.8), QSizeF(1.6 * r, 1.6 * r)));
+        }
+        p.setPen(QPen(blue, 0.8));
+        p.setBrush(Qt::white);
+        p.drawEllipse(g.start, r * 1.1, r * 1.1);
+        p.drawEllipse(g.tip, r * 1.1, r * 1.1);
+    }
+    const QColor col = !c.color.isEmpty() && QColor::isValidColorName(c.color) ? QColor::fromString(c.color) : s_.mechanismColor();
+
+    // The head is the document's own arrowhead (as on its reaction arrows), a size smaller: filled with a
+    // shallow notch, or an open chevron if the style says so. The line runs into the notch, or to the point.
+    const bool filled = s_.arrowHeadFilled;
+    const double arcLen = q.length(), notch = hl * kNotch;
+    const double tn = arcLen > 1e-9 ? q.tBack(notch) : 0.0;
+    const QPointF dir = g.tipDir, notchPt = g.notch, tip = g.headTip, back = tip - dir * hl;
+    QPointF nrm = perp(dir);
+    if (dot(nrm, g.apex - (g.start + g.tip) / 2) < 0) nrm = -nrm;  // toward the outside of the curve
+
+    QPainterPath path;
+    q.sub(0, tn).addTo(path);
+    path.lineTo(filled ? notchPt + dir * std::min(lw, notch * 0.5) : tip);
+    p.setPen(QPen(col, lw, filled ? Qt::SolidLine : Qt::SolidLine, filled ? Qt::RoundCap : Qt::FlatCap, Qt::RoundJoin));
+    p.setBrush(Qt::NoBrush);
+    p.drawPath(path);
+
+    // An electron pair gets a whole head; a single electron (fishhook) one barb, on the outside of the curve.
+    if (filled) {
+        QPolygonF head;
+        if (c.half) head << tip << back + nrm * hw << notchPt;
+        else head << tip << back + nrm * hw << notchPt << back - nrm * hw;
+        p.setPen(QPen(col, lw * 0.5, Qt::SolidLine, Qt::RoundCap, Qt::MiterJoin));
+        p.setBrush(col);
+        p.drawPolygon(head);
+    } else {
+        p.setPen(QPen(col, lw, Qt::SolidLine, Qt::RoundCap, Qt::MiterJoin));
+        p.drawLine(tip, back + nrm * hw);
+        if (!c.half) p.drawLine(tip, back - nrm * hw);
+    }
+}
+
 FontSpec Renderer::textFont(const TextBox& t) const {
     FontSpec f = labelFont();
     if (t.size > 0) f.size = t.size;
@@ -761,22 +1383,30 @@ QRectF Renderer::textRect(const TextBox& t) const {
 void Renderer::drawSchemeExtras(QPainter& p, const Document& d, const ChemOverlay& ov) const {
     // Plus signs between molecules on the same side of a step.
     const FontSpec f{s_.font, s_.fontSize * 1.3};
-    auto plusBetween = [&](const QStringList& ids) {
-        for (int i = 0; i + 1 < ids.size(); ++i) {
-            const Molecule* a = d.molecule(ids[i]);
-            const Molecule* b = d.molecule(ids[i + 1]);
-            if (!a || !b) continue;
-            QRectF ra = moleculeRect(*a, ov), rb = moleculeRect(*b, ov);
-            QPointF c((ra.right() + rb.left()) / 2, (ra.center().y() + rb.center().y()) / 2);
-            double w = runsWidth({{"+"}}, f);
-            drawRuns(p, {{"+"}}, QPointF(c.x() - w / 2, c.y() + capHeight(f) / 2), f, s_.color);
-        }
-    };
+    for (const auto& ps : plusSigns(d, ov)) {
+        const double w = runsWidth({{"+"}}, f);
+        const QPointF c = ps.rect.center();
+        drawRuns(p, {{"+"}}, QPointF(c.x() - w / 2, c.y() + capHeight(f) / 2), f, s_.color);
+    }
+}
+
+std::vector<PlusSign> Renderer::plusSigns(const Document& d, const ChemOverlay& ov) const {
+    std::vector<PlusSign> out;
+    const FontSpec f{s_.font, s_.fontSize * 1.3};
+    const double w = runsWidth({{"+"}}, f), h = capHeight(f);
     for (const auto& s : d.schemes)
-        for (const auto& st : s.steps) {
-            plusBetween(st.reactants);
-            plusBetween(st.products);
-        }
+        for (const auto& st : s.steps)
+            for (const QStringList* ids : {&st.reactants, &st.products})
+                for (int i = 0; i + 1 < ids->size(); ++i) {
+                    if (st.noPlus.contains((*ids)[i])) continue;
+                    const Molecule* a = d.molecule((*ids)[i]);
+                    const Molecule* b = d.molecule((*ids)[i + 1]);
+                    if (!a || !b) continue;
+                    const QRectF ra = moleculeRect(*a, ov), rb = moleculeRect(*b, ov);
+                    const QPointF c((ra.right() + rb.left()) / 2, (ra.center().y() + rb.center().y()) / 2);
+                    out.push_back({QRectF(c.x() - w / 2, c.y() - h / 2, w, h), st.arrow, (*ids)[i]});
+                }
+    return out;
 }
 
 QRectF Renderer::documentBounds(const Document& d, const ChemOverlay& ov) const {
@@ -788,6 +1418,8 @@ QRectF Renderer::documentBounds(const Document& d, const ChemOverlay& ov) const 
     }
     for (const auto& a : d.arrows) r |= arrowGeom(a, &d).bounds;
     for (const auto& t : d.texts) r |= textRect(t);
+    for (const auto& c : d.curved)
+        if (const CurvedGeom g = curvedGeom(c, d, ov); g.ok) r |= g.bounds;
     return r;
 }
 
@@ -800,6 +1432,14 @@ void Renderer::draw(QPainter& p, const Document& d, const ChemOverlay& ov, const
     const bool maps = d.showMaps || (deco && deco->forceMaps);
     for (const auto& m : d.molecules) drawMolecule(p, m, ov, deco, changes, maps);
     for (const auto& a : d.arrows) drawArrow(p, a, d, deco);
+    for (const auto& c : d.curved) drawCurved(p, c, d, ov, deco);
+    if (deco && deco->hoverId.startsWith("plus:"))
+        for (const auto& ps : plusSigns(d, ov))
+            if (ps.id() == deco->hoverId) {
+                p.setPen(Qt::NoPen);
+                p.setBrush(kHover);
+                p.drawRoundedRect(ps.rect.adjusted(-2, -2, 2, 2), 2, 2);
+            }
     drawSchemeExtras(p, d, ov);
     for (const auto& t : d.texts) {
         const FontSpec f = textFont(t);
@@ -813,7 +1453,13 @@ void Renderer::draw(QPainter& p, const Document& d, const ChemOverlay& ov, const
         if (deco && deco->editingId == t.id) continue;
         double y = r.top() + capHeight(f) + f.size * 0.1;
         for (const auto& l : t.text.split('\n')) {
-            drawRuns(p, labels::markupRuns(l), QPointF(r.left(), y), f, tc);
+            const auto runs = labels::markupRuns(l);
+            double x = r.left();
+            if (!t.align.isEmpty()) {
+                double spare = r.width() - runsWidth(runs, f);
+                x += t.align == "right" ? spare : t.align == "center" ? spare / 2 : 0;
+            }
+            drawRuns(p, runs, QPointF(x, y), f, tc);
             y += f.size * 1.25;
         }
     }

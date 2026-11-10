@@ -29,7 +29,15 @@ struct Analysis {
     QStringList undefinedStereo;            // atom ids of undefined stereocentres (W102)
     QMap<QString, int> elementCounts;       // including hydrogens
     QHash<QString, QString> cip;            // atom id -> "R"/"S", bond id -> "E"/"Z" (CIP rules)
+    // Atom id -> how many lone pairs the atom really has: its outer electrons not used in bonds (to
+    // atoms or hydrogens), charge or radicals, in pairs. A label (OMe) counts for its attaching atom.
+    QHash<QString, int> lonePairs;
 };
+
+// No atom shows more lone pairs than it really has: counts above that (an atom changed, bonded or
+// charged since, or a hand-edited file) come down to it, and an arrow that started from a lone pair
+// that is gone starts from its atom instead. Only molecules showing lone pairs are analysed.
+void capLonePairs(Document& d);
 
 MolInfo info(const Molecule& m, bool withInchi = true);
 QString smiles(const Molecule& m);

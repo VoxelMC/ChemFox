@@ -68,4 +68,12 @@ int groupsGeneration();
 QString checkGroup(const QString& name, const QString& smiles);
 
 }  // namespace labels
+
+// Whole-line bold and italic for text boxes (right-click → Bold / Italic): each non-empty line is wrapped
+// in markup, **bold**, *italic* or ***both***.
+namespace textlines {
+bool allBold(const QString& text);
+bool allItalic(const QString& text);
+QString restyle(const QString& text, bool bold, bool italic);
+}  // namespace textlines
 }  // namespace cd

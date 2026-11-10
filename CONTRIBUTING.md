@@ -39,6 +39,14 @@ runs the tests. A few extras:
 - `chemfox_tests "[.bench]"` times the hot paths on a large molecule.
 - Set `CHEMFOX_SNAPSHOT=<folder>` before running the tests to save PNG snapshots of panels and canvases.
 
+## Branches
+
+- `main`: released code only. Every release is a tag on `main`.
+- `dev`: finished work between releases; always builds. CI runs on every push.
+- `feature/<name>`: one per feature, branched from `dev` and merged back into it by pull request.
+- Releasing: merge `dev` into `main` by pull request, then follow the steps below on `main`.
+- Urgent fix to a release: branch from `main`, release it as a patch, then merge `main` back into `dev`.
+
 ## Versions and releases
 
 ChemFox uses [semantic versioning](https://semver.org). The version is set once, in `CMakeLists.txt`

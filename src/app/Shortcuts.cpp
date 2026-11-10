@@ -51,9 +51,10 @@ QString keysText(const QList<QKeySequence>& keys) {
     return out.join(", ");
 }
 
-const QStringList kTargetOrder = {"atom", "bond", "arrow", "text", "number", "empty", "any"};
+const QStringList kTargetOrder = {"atom", "bond", "arrow", "mechanism", "text", "number", "empty", "any"};
 const QHash<QString, QString> kTargetNames = {{"atom", "On an atom"},        {"bond", "On a bond"},
                                               {"arrow", "On an arrow"},      {"text", "On text"},
+                                              {"mechanism", "On a mechanism arrow"},
                                               {"number", "On a compound name"}, {"empty", "On empty canvas"},
                                               {"any", "Anywhere"}};
 

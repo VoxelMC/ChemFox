@@ -5,6 +5,7 @@
 #include "core/chem/Chem.h"
 #include "core/commands/Commands.h"
 #include "editor/Keymap.h"
+#include "editor/Snap.h"
 #include "render/Renderer.h"
 #include "style/Style.h"
 #include "warnings/Warnings.h"
@@ -33,8 +34,8 @@ struct ReactionResult {
 };
 
 struct Hit {
-    enum Kind { None, AtomHit, BondHit, NumberHit, ArrowHit, TextHit } kind = None;
-    QString id;     // atom, bond, arrow or text id; molecule id for numbers
+    enum Kind { None, AtomHit, BondHit, NumberHit, ArrowHit, TextHit, CurvedHit, PlusHit } kind = None;
+    QString id;     // atom, bond, arrow, text or mechanism-arrow id; molecule id for numbers
     QString molId;  // owning molecule for atoms, bonds, numbers
     double dist = 0;
 };
@@ -45,7 +46,7 @@ public:
     explicit Canvas(QWidget* parent = nullptr);
 
     // What a drag on empty canvas does. Hover-and-type keys and dragging from atoms work in every tool.
-    enum class Tool { Select, Chain, Arrow, BentArrow, Text };
+    enum class Tool { Select, Chain, Arrow, BentArrow, Text, Mechanism };
     Tool tool() const { return tool_; }
     void setTool(Tool t);
 
@@ -104,6 +105,9 @@ public:
     // auto-mapping steps that have no mapping yet. Toggles: on unless all are already on.
     void toggleBondChanges(QStringList arrowIds = {});
     bool showsBondChanges(const QString& arrowId) const;
+    // Preferences: new bonds/rings/groups lean toward the mouse; the scroll wheel pans (Ctrl+wheel zooms).
+    void setSteerToMouse(bool on) { steerToMouse_ = on; }
+    void setWheelPans(bool on) { wheelPans_ = on; }
     // The focused atom (orange), if any: keys act on it until Escape or a click.
     QString focusedAtom() const { return stickyAtom_; }
     // Move the focused atom to its bonded neighbour in direction `dir` (screen axes, y down).
@@ -120,7 +124,35 @@ public:
     // onto empty canvas to unmap it. Map numbers and partners are shown while it is on.
     bool mapMode() const { return mapMode_; }
     void setShowPageGuide(bool on) { showPageGuide_ = on; update(); }
+    bool showsPageGuide() const { return showPageGuide_; }
+    // A dot grid (screen only, never exported); with snapping on, dragged objects land on it.
+    // `size` is the grid spacing in bond lengths.
+    void setGrid(bool show, bool snap, double size);
+    bool showsGrid() const { return showGrid_; }
+    bool snapsToGrid() const { return snapGrid_; }
+    double gridSize() const { return gridSize_; }
+    // Copies of the selection (or the hovered object), offset a little and selected.
+    void duplicateSelection();
+    // Draw the selection (or the hovered object) above / below the others of its kind.
+    void restackSelection(bool toFront);
     void setMapMode(bool on);
+
+    // Mechanism arrows from the keyboard: the first press (on an atom, bond or lone pair) picks where the
+    // electrons come from, the second (on an atom or bond, or empty canvas) where they go.
+    void startCurved(bool half);
+    // Remove one "+" between structures of a step ("plus:<arrow>:<structure>", as Hit ids name them).
+    void removePlus(const QString& plusId);
+    bool curvedPending() const { return curvedPending_; }
+    // Line up or space out the selection (or the hovered object with the selection).
+    void alignSelection(snap::Align mode);
+    // Show a rotation handle on the selection (or the hovered structure); dragging it turns them in 15° steps.
+    void startRotate();
+    bool rotating() const { return !rotateIds_.isEmpty(); }
+    QPointF rotateHandleScreen() const { return modelToScreen(rotateHandle()); }
+    // Snap guides drawn during the current Shift+drag (points), for tests.
+    const std::vector<QLineF>& guides() const { return guides_; }
+    // The atom or bond a mechanism-arrow end being dragged would attach to (empty: a free end), for tests.
+    QString dragTarget() const { return curvedTarget_.id; }
 
     // Reaction builder: create (empty arrowId) or replace the step drawn with that arrow.
     ReactionResult applyReaction(const ReactionSpec& spec, const QString& arrowId, int mergeKey = -1);
@@ -137,6 +169,8 @@ signals:
     void mapModeChanged(bool on);
     void toolChanged(int tool);
     void addToReaction(const QString& smiles, int role);  // 0 reactant, 1 reagent, 2 product
+    void editReaction(const QString& arrowId);             // open this arrow's step in the Reaction Builder
+    void gridChanged();                                     // grid shown or snapping toggled from the canvas
     void status(const QString& text);
 
 protected:
@@ -155,7 +189,7 @@ protected:
 
 private:
     enum class Drag { None, Pan, BondFromAtom, Chain, Move, Rubber, ArrowHead, ArrowTail, MapLink, DrawArrow,
-                      ArrowCorner, ArrowSegment };
+                      ArrowCorner, ArrowSegment, DrawCurved, CurvedBulge, CurvedFrom, CurvedTo, CurvedC1, CurvedC2, Rotate };
 
     QPointF toPt(QPointF screen) const { return (screen - pan_) / zoom_; }
     QPointF toScreen(QPointF pt) const { return pt * zoom_ + pan_; }
@@ -202,7 +236,9 @@ private:
     // Building a chain from the keyboard: keys act on the newest atom (marked orange) wherever the
     // mouse is, until Escape or a click; the mouse steers each new bond.
     QString stickyAtom_;
-    int groupsGen_ = -1;  // labels::groupsGeneration() the chemistry caches were built with
+    int groupsGen_ = -1;
+    bool steerToMouse_ = true;
+    bool wheelPans_ = false;  // labels::groupsGeneration() the chemistry caches were built with
     QPointF lastMouse_;
     bool mouseInside_ = false;
     std::vector<Hit> hits_;
@@ -222,6 +258,12 @@ private:
     bool spaceDown_ = false;
     bool mapMode_ = false;
     bool showPageGuide_ = false;
+    bool showGrid_ = false;
+    bool snapGrid_ = false;
+    double gridSize_ = 0.5;
+    QPointF moveRef_;  // the point of a dragged object that snaps to the grid (model units)
+    QPointF snapToGrid(QPointF model) const;
+    QSet<QString> actionTargets() const;  // hovered object (with the selection, if part of it), else the selection
     int dragIndex_ = 0;  // corner or segment of the arrow being reshaped
     void finishMapLink(QPointF screen);
     Tool tool_ = Tool::Select;
@@ -245,6 +287,40 @@ private:
         QStringList names;
     } cycle_;
     int cycleSerial_ = 0;
+
+    // Mechanism arrows
+    bool curvedPending_ = false;
+    bool curvedHalf_ = false;
+    Hit curvedTarget_;  // what a dragged mechanism-arrow end would attach to (highlighted); None = a free end
+    // The atom or bond under the mouse that a dragged arrow end would attach to, and where the preview should end.
+    Hit curvedTargetAt(QPointF screen, QPointF model, QPointF* end) const;
+    CurvedEnd curvedFrom_;
+    // The end a hit stands for: an atom (its lone pair if it shows any or the mouse is on one), a bond, or a point.
+    CurvedEnd endFor(const Hit& h, QPointF model) const;
+    void finishCurved(const Hit& h, QPointF model);
+    // The handle of a hovered or selected mechanism arrow within a few pixels of a screen point:
+    // 0 its tail, 1 its head, 2 and 3 its control points. -1 if none.
+    int curvedHandleAt(QPointF screen, QString* id) const;
+    // The arrow with its current shape (automatic or not) written in as a hand-set one, ready to adjust.
+    CurvedArrow withShape(const CurvedArrow& c, const Document& d) const;
+
+    // Moving: the document dragged things are moved within (the original, or the original plus copies
+    // for an Alt+drag duplicate), and the guides shown while Shift snaps.
+    Document moveBase_;
+    bool altDuplicate_ = false;
+    bool dupMade_ = false;
+    bool atomMove_ = false;  // the current move drags atoms on their own, not whole structures
+    double rotateReach_ = 0;  // points from the centre to the top of the objects, when the turn began
+    void alignIds(const QSet<QString>& ids, snap::Align mode);
+    void startRotateOn(const QSet<QString>& ids);
+    std::vector<QLineF> guides_;
+    QRectF objectRect(const QString& id) const;  // points
+    QPointF snapGuideDelta(const QSet<QString>& ids, QPointF delta);  // model units; fills guides_
+
+    QSet<QString> rotateIds_;
+    QPointF rotateCenter_;  // model units
+    double rotateStart_ = 0, rotateShown_ = 0;  // radians
+    QPointF rotateHandle() const;  // model units
 
     QPointer<QLineEdit> inline_;
     QString editingId_;

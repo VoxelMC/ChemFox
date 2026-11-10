@@ -3,10 +3,12 @@
 
 #include "app/ReactionBuilder.h"
 #include "app/Shortcuts.h"
+#include "app/Preferences.h"
 #include "app/StyleEditor.h"
 #include "app/Updates.h"
 
 #include "core/chem/Chem.h"
+#include "core/model/Geometry.h"
 #include "core/model/Labels.h"
 #include "editor/Canvas.h"
 #include "editor/Templates.h"
@@ -31,8 +33,11 @@
 #include <QInputDialog>
 #include <QLabel>
 #include <QListWidget>
+#include <QLockFile>
+#include <QStandardPaths>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainterPath>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -68,6 +73,30 @@ QString richFormula(const QString& f) {
     return out;
 }
 
+// A tool icon with its hover key in the bottom-right corner ("V", "⇧A"), on a small chip so it reads over
+// the drawing. An empty key gives the plain icon.
+QIcon keyBadge(const QIcon& base, QString key, const QColor& ink, const QColor& bg) {
+    if (key.isEmpty()) return base;
+    key.replace("Shift+", QString::fromUtf8("⇧"));
+    QPixmap pm = base.pixmap(48, 48);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    QFont f("Arial");
+    f.setPixelSize(key.size() > 1 ? 26 : 30);  // drawn at 2x: about 13-15 px on screen
+    f.setBold(true);
+    p.setFont(f);
+    QRectF r = QFontMetricsF(f).tightBoundingRect(key).adjusted(-4, -4, 4, 4);
+    r.moveBottomRight(QPointF(48, 48));
+    QColor chip = bg;
+    chip.setAlpha(230);
+    p.setPen(Qt::NoPen);
+    p.setBrush(chip);
+    p.drawRoundedRect(r, 4, 4);
+    p.setPen(ink);
+    p.drawText(r, Qt::AlignCenter, key);
+    return QIcon(pm);
+}
+
 // Simple line icons drawn in the palette's text colour, so they suit light and dark themes.
 QIcon toolIcon(const QString& kind, const QColor& ink) {
     QPixmap pm(48, 48);
@@ -97,6 +126,12 @@ QIcon toolIcon(const QString& kind, const QColor& ink) {
     } else if (kind == "bent") {
         p.drawPolyline(QPolygonF({QPointF(8, 8), QPointF(8, 30), QPointF(34, 30)}));
         head(QPointF(43, 30), QPointF(1, 0));
+    } else if (kind == "mechanism") {
+        QPainterPath arc;
+        arc.moveTo(8, 36);
+        arc.quadTo(20, 4, 38, 24);
+        p.drawPath(arc);
+        head(QPointF(42, 31), QPointF(0.5, 0.87));
     } else if (kind == "text") {
         QFont f("Arial");
         f.setPixelSize(34);
@@ -141,6 +176,33 @@ MainWindow::MainWindow() {
     restoreGeometry(s.value("window/geometry").toByteArray());
     restoreState(s.value("window/state").toByteArray());
 
+    // Recovery copies of unsaved work: one per window, locked while it runs.
+    {
+        QString dir = QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) + "/recovery";
+        QDir().mkpath(dir);
+        const QString base = dir + QString("/unsaved-%1").arg(QCoreApplication::applicationPid());
+        recoveryPath_ = base + ".cmfx";
+        recoveryLock_ = std::make_unique<QLockFile>(base + ".lock");
+        recoveryLock_->setStaleLockTime(0);
+        recoveryLock_->tryLock(0);
+    }
+    connect(&autosave_, &QTimer::timeout, this, &MainWindow::writeRecovery);
+    connect(canvas_->undoStack(), &QUndoStack::cleanChanged, this, [this](bool clean) { if (clean) clearRecovery(); });
+    connect(canvas_, &Canvas::gridChanged, this, [this] {
+        QSettings s;
+        s.setValue(prefs::kShowGrid, canvas_->showsGrid());
+        s.setValue(prefs::kSnapGrid, canvas_->snapsToGrid());
+        applyPreferences();
+    });
+
+    applyPreferences();  // canvas options and the default style for the first blank document
+    {
+        // Preferences → General: the tool selected at startup.
+        static const QHash<QString, Canvas::Tool> tools = {{"select", Canvas::Tool::Select}, {"chain", Canvas::Tool::Chain},
+                                                           {"arrow", Canvas::Tool::Arrow}, {"bent", Canvas::Tool::BentArrow},
+                                                           {"text", Canvas::Tool::Text}, {"mechanism", Canvas::Tool::Mechanism}};
+        canvas_->setTool(tools.value(s.value(prefs::kStartTool, "select").toString(), Canvas::Tool::Select));
+    }
     updateTitle();
     updateInfo();
     updateWarnings();
@@ -158,7 +220,11 @@ void MainWindow::buildMenus() {
     file->addSeparator();
     file->addAction("&Import Structure (MOL, SDF, SMILES, InChI)…", QKeySequence("Ctrl+I"), this, &MainWindow::importStructure);
     auto* exp = file->addMenu("&Export");
-    exp->addAction("SVG (reopenable)…", QKeySequence("Ctrl+E"), this, [this] { exportAs("svg"); });
+    // Ctrl+E exports in the format chosen in Preferences → Export.
+    exportDefaultAction_ = exp->addAction("Export…", QKeySequence("Ctrl+E"), this, [this] { exportAs(prefs::exportFormat()); });
+    exportDefaultAction_->setObjectName("file.exportDefault");
+    exp->addSeparator();
+    exp->addAction("SVG (reopenable)…", this, [this] { exportAs("svg"); });
     exp->addAction("PDF…", this, [this] { exportAs("pdf"); });
     exp->addAction("PNG…", this, [this] { exportAs("png"); });
     if (io::emfSupported()) exp->addAction("EMF (Word, PowerPoint)…", this, [this] { exportAs("emf"); });
@@ -181,6 +247,25 @@ void MainWindow::buildMenus() {
     edit->addAction("&Paste", QKeySequence::Paste, canvas_, &Canvas::paste);
     edit->addAction("Paste SMILES or InChI…", QKeySequence("Ctrl+Shift+V"), this, &MainWindow::pasteSmilesDialog);
     edit->addAction("Select &All", QKeySequence::SelectAll, canvas_, &Canvas::selectAll);
+    edit->addAction("&Duplicate", QKeySequence("Ctrl+D"), canvas_, &Canvas::duplicateSelection)
+        ->setStatusTip("Copy the hovered object or the selection, offset a little");
+    edit->addAction("Bring to &Front", QKeySequence("Ctrl+Shift+]"), canvas_, [this] { canvas_->restackSelection(true); });
+    edit->addAction("Send to &Back", QKeySequence("Ctrl+Shift+["), canvas_, [this] { canvas_->restackSelection(false); });
+    {
+        auto* al = edit->addMenu("A&lign and Distribute");
+        struct A { const char* text; const char* id; snap::Align mode; };
+        static const A aligns[] = {
+            {"Align Left", "align.left", snap::Align::Left}, {"Align Centre", "align.center", snap::Align::HCenter},
+            {"Align Right", "align.right", snap::Align::Right}, {"Align Top", "align.top", snap::Align::Top},
+            {"Align Middle", "align.middle", snap::Align::VCenter}, {"Align Bottom", "align.bottom", snap::Align::Bottom},
+            {"Distribute Horizontally", "align.distributeH", snap::Align::DistributeH},
+            {"Distribute Vertically", "align.distributeV", snap::Align::DistributeV}};
+        for (int i = 0; i < 8; ++i) {
+            if (i == 3 || i == 6) al->addSeparator();
+            const snap::Align mode = aligns[i].mode;
+            al->addAction(aligns[i].text, this, [this, mode] { canvas_->alignSelection(mode); })->setObjectName(aligns[i].id);
+        }
+    }
     auto* copyAs = edit->addMenu("Copy &As");
     // Commands that act on the hovered structure or arrow, else the selection.
     auto cmd = [this](QMenu* m, const QString& text, const QString& id) {
@@ -195,10 +280,10 @@ void MainWindow::buildMenus() {
     cmd(copyAs, "Image (PNG + SVG)", "copy.image");
     edit->addSeparator();
     edit->addAction("Silenced Warnings…", this, &MainWindow::showSilenced);
-    edit->addAction("&Keyboard Shortcuts…", QKeySequence("Ctrl+Alt+K"), this, [this] {
-        ShortcutsDialog dlg(shortcuts_, canvas_, this);
-        dlg.exec();
-    });
+    edit->addAction("&Keyboard Shortcuts…", QKeySequence("Ctrl+Alt+K"), this, [this] { openShortcuts(); });
+    // Ctrl+, (Cmd+, on macOS, where Qt moves it to ChemFox → Settings…).
+    QAction* prefsAction = edit->addAction("Pr&eferences…", QKeySequence("Ctrl+,"), this, &MainWindow::showPreferences);
+    prefsAction->setMenuRole(QAction::PreferencesRole);
 
     auto* structure = menuBar()->addMenu("&Structure");
     structure->addAction("&Clean Structure", QKeySequence("Ctrl+L"), canvas_, &Canvas::cleanStructure);
@@ -208,6 +293,7 @@ void MainWindow::buildMenus() {
     cmd(transform, "Rotate 90° Clockwise", "structure.rotateCW");
     cmd(transform, "Rotate 90° Counter-clockwise", "structure.rotateCCW");
     cmd(transform, "Rotate 180°", "structure.rotate180");
+    transform->addAction("Rotate Freely… (Shift+R over it)", canvas_, &Canvas::startRotate)->setObjectName("structure.rotateFree");
     cmd(structure, "Align to Reactant / Product", "structure.align");
     structure->addSeparator();
     cmd(structure, "Show Stereo Labels (R/S, E/Z)", "structure.toggleStereo");
@@ -262,10 +348,20 @@ void MainWindow::buildMenus() {
     view->addAction("Zoom &Out", QKeySequence::ZoomOut, this, [this] { canvas_->zoomBy(0.8); });
     view->addAction("Zoom to &Fit", QKeySequence("Ctrl+0"), canvas_, &Canvas::zoomToFit);
     view->addAction("Actual &Size", QKeySequence("Ctrl+1"), canvas_, &Canvas::resetZoom);
-    QAction* guide = view->addAction("&Page Width Guide");
+    QAction* guide = pageGuideAction_ = view->addAction("&Page Width Guide");
     guide->setCheckable(true);
     guide->setToolTip("Show the style's page width (the row width Arrange Scheme wraps at), measured from the origin");
-    connect(guide, &QAction::toggled, canvas_, &Canvas::setShowPageGuide);
+    connect(guide, &QAction::toggled, this, [this](bool on) {
+        canvas_->setShowPageGuide(on);
+        QSettings().setValue(prefs::kPageGuide, on);
+    });
+    gridAction_ = view->addAction("Show &Grid");
+    gridAction_->setCheckable(true);
+    connect(gridAction_, &QAction::toggled, this, [this](bool on) { QSettings().setValue(prefs::kShowGrid, on); applyPreferences(); });
+    snapGridAction_ = view->addAction("S&nap to Grid");
+    snapGridAction_->setCheckable(true);
+    snapGridAction_->setStatusTip("Moved objects land on the grid");
+    connect(snapGridAction_, &QAction::toggled, this, [this](bool on) { QSettings().setValue(prefs::kSnapGrid, on); applyPreferences(); });
     view->addSeparator();
     viewMenuDocks_ = view;
 
@@ -289,7 +385,7 @@ void MainWindow::buildMenus() {
     auto* updater = new updates::Checker(repo, CHEMFOX_VERSION, this);
     help->addAction("Check for &Updates…", this, [updater] { updater->check(true); })
         ->setStatusTip("Ask GitHub whether a newer ChemFox is out");
-    QAction* autoUpdate = help->addAction("Check for Updates Automatically");
+    QAction* autoUpdate = autoUpdateAction_ = help->addAction("Check for Updates Automatically");
     autoUpdate->setCheckable(true);
     autoUpdate->setChecked(QSettings().value("updates/auto", true).toBool());
     autoUpdate->setStatusTip("At most once a day, at startup; only asks GitHub for the list of releases");
@@ -306,7 +402,7 @@ void MainWindow::buildMenus() {
     help->addAction("&About ChemFox", this, [this, repo] {
         QMessageBox::about(this, "About ChemFox",
                            QString("<h3>ChemFox %1</h3>"
-                                   "<p>A keyboard-first editor for chemical structures and reaction schemes.</p>"
+                                   "<p>An open-source graphical editor for chemical structures and reaction schemes.</p>"
                                    "<p>Apache License 2.0.%2</p>"
                                    "<p>Chemistry by <a href='https://www.rdkit.org'>RDKit</a>; interface by "
                                    "<a href='https://www.qt.io'>Qt</a> (LGPL v3). See Help → Third-Party Licences.</p>")
@@ -324,20 +420,21 @@ void MainWindow::buildMenus() {
     menuBar()->insertMenu(help->menuAction(), toolMenu);
     auto* group = new QActionGroup(this);
     const QColor ink = palette().color(QPalette::WindowText);
-    struct ToolDef { const char* label; const char* icon; Canvas::Tool tool; const char* tip; };
-    const ToolDef defs[] = {
-        {"Select", "select", Canvas::Tool::Select, "Drag on empty canvas to select (box)"},
-        {"Chain", "chain", Canvas::Tool::Chain, "Drag on empty canvas to draw a zig-zag chain"},
-        {"Arrow", "arrow", Canvas::Tool::Arrow, "Drag to draw a reaction arrow (15° steps; Alt: free)"},
-        {"Bent", "bent", Canvas::Tool::BentArrow,
+    struct ToolDef { const char* label; const char* icon; Canvas::Tool tool; const char* action; const char* tip; };
+    static const ToolDef defs[] = {
+        {"Select", "select", Canvas::Tool::Select, "tool:select", "Drag on empty canvas to select (box)"},
+        {"Chain", "chain", Canvas::Tool::Chain, "tool:chain", "Drag on empty canvas to draw a zig-zag chain"},
+        {"Arrow", "arrow", Canvas::Tool::Arrow, "tool:arrow", "Drag to draw a reaction arrow (15° steps; Alt: free)"},
+        {"Bent", "bent", Canvas::Tool::BentArrow, "tool:bent",
          "Click each corner of a bent arrow; double-click or Enter to finish, Esc to cancel"},
-        {"Text", "text", Canvas::Tool::Text, "Click to add text (**bold**, *italic*)"},
+        {"Text", "text", Canvas::Tool::Text, "tool:text", "Click to add text (**bold**, *italic*)"},
+        {"Curved", "mechanism", Canvas::Tool::Mechanism, "tool:mechanism",
+         "Mechanism arrows: drag from an atom, lone pair or bond to where the electrons go (Shift: fishhook)"},
     };
     QList<QAction*> toolActions;
     for (const auto& t : defs) {
         QAction* a = tools->addAction(toolIcon(t.icon, ink), t.label);
         a->setCheckable(true);
-        a->setToolTip(QString("%1 — %2").arg(t.label, t.tip));
         a->setStatusTip(t.tip);
         group->addAction(a);
         toolMenu->addAction(a);
@@ -345,6 +442,24 @@ void MainWindow::buildMenus() {
         connect(a, &QAction::triggered, canvas_, [this, tool] { canvas_->setTool(tool); });
         toolActions << a;
     }
+    // Show each tool's hover key: a badge on the toolbar icon, the shortcut column in the Tools menu and the
+    // tooltip. Display only: a real menu shortcut would take plain letters away from the canvas and text boxes.
+    // Refreshed when keys are rebound.
+    refreshToolKeys_ = [this, toolActions, ink] {
+        const QColor bg = palette().color(QPalette::Window);
+        for (int i = 0; i < toolActions.size(); ++i) {
+            const ToolDef& t = defs[i];
+            const QStringList keys = canvas_->keymap().keysFor("any", t.action);
+            const QString key = keys.value(0);
+            QAction* a = toolActions[i];
+            a->setIcon(keyBadge(toolIcon(t.icon, ink), key, ink, bg));
+            a->setText(key.isEmpty() ? QString(t.label) : QString("%1\t%2").arg(t.label, key));
+            a->setIconText(t.label);
+            a->setToolTip(key.isEmpty() ? QString("%1 — %2").arg(t.label, t.tip)
+                                        : QString("%1 (%2) — %3").arg(t.label, key, t.tip));
+        }
+    };
+    refreshToolKeys_();
     toolActions.front()->setChecked(true);
     connect(canvas_, &Canvas::toolChanged, this, [toolActions](int t) { toolActions[t]->setChecked(true); });
     tools->addSeparator();
@@ -465,6 +580,11 @@ void MainWindow::buildDocks() {
     connect(toggleBuilder, &QAction::toggled, builder, [builder](bool on) {
         if (on) builder->setFocus();
     });
+    connect(canvas_, &Canvas::editReaction, this, [builder, builderDock](const QString&) {
+        builderDock->show();
+        builderDock->raise();
+        builder->editSelected();  // the canvas has just selected that arrow
+    });
     connect(canvas_, &Canvas::addToReaction, this, [builder, builderDock](const QString& smiles, int role) {
         builderDock->show();
         builderDock->raise();
@@ -583,10 +703,68 @@ bool MainWindow::maybeSave() {
 void MainWindow::newDocument() {
     if (!maybeSave()) return;
     path_.clear();
-    canvas_->setDocument(Document{});
+    canvas_->setDocument(blankDocument());
     canvas_->resetZoom();
     updateTitle();
     syncStyleUi();
+}
+
+Document MainWindow::blankDocument() const {
+    Document d;
+    d.styleName = prefs::defaultStyle();  // Preferences → General
+    return d;
+}
+
+void MainWindow::applyPreferences() {
+    QSettings s;
+    canvas_->setSteerToMouse(s.value(prefs::kSteerToMouse, true).toBool());
+    canvas_->setWheelPans(s.value(prefs::kWheelPans, false).toBool());
+    geom::setDefaultSnapStep((s.value(prefs::kBondStep, 30).toInt() == 15 ? 15 : 30) * M_PI / 180.0);
+    canvas_->setGrid(s.value(prefs::kShowGrid, false).toBool(), s.value(prefs::kSnapGrid, false).toBool(),
+                     s.value(prefs::kGridSize, 0.5).toDouble());
+    for (auto [act, on] : {std::pair{pageGuideAction_, s.value(prefs::kPageGuide, false).toBool()},
+                           std::pair{gridAction_, canvas_->showsGrid()}, std::pair{snapGridAction_, canvas_->snapsToGrid()}}) {
+        if (!act) continue;
+        QSignalBlocker block(act);
+        act->setChecked(on);
+    }
+    canvas_->setShowPageGuide(s.value(prefs::kPageGuide, false).toBool());
+    if (exportDefaultAction_) exportDefaultAction_->setText(QString("Export as %1…").arg(prefs::exportFormat().toUpper()));
+    if (s.value(prefs::kAutosave, true).toBool())
+        autosave_.start(std::clamp(s.value(prefs::kAutosaveMinutes, 2).toInt(), 1, 30) * 60 * 1000);
+    else {
+        autosave_.stop();
+        clearRecovery();
+    }
+    if (autoUpdateAction_) {
+        QSignalBlocker block(autoUpdateAction_);
+        autoUpdateAction_->setChecked(s.value(prefs::kAutoUpdate, true).toBool());
+    }
+    // A pristine untitled document follows a new default style straight away.
+    if (path_.isEmpty() && canvas_->doc().molecules.empty() && canvas_->doc().arrows.empty() &&
+        canvas_->doc().texts.empty() && canvas_->undoStack()->count() == 0)
+        canvas_->setDocument(blankDocument());
+    syncStyleUi();
+}
+
+void MainWindow::showPreferences() {
+    PreferencesDialog dlg([this] { openShortcuts(); }, this);
+    connect(&dlg, &PreferencesDialog::changed, this, &MainWindow::applyPreferences);
+    dlg.exec();
+    applyPreferences();
+}
+
+void MainWindow::openShortcuts() {
+    ShortcutsDialog dlg(shortcuts_, canvas_, this);
+    dlg.exec();
+    if (refreshToolKeys_) refreshToolKeys_();  // tool keys may have been rebound
+}
+
+bool MainWindow::reopenLastFile() {
+    QSettings s;
+    if (!s.value(prefs::kReopenLast, false).toBool()) return false;
+    QString last = s.value(prefs::kLastFile).toString();
+    return !last.isEmpty() && QFileInfo::exists(last) && openPath(last);
 }
 
 bool MainWindow::openPath(const QString& path) {
@@ -615,6 +793,7 @@ bool MainWindow::openPath(const QString& path) {
     }
     canvas_->setDocument(*d);
     path_ = lower.endsWith(".svg") ? QString() : path;
+    if (!path_.isEmpty()) QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
     updateTitle();
     syncStyleUi();
     return true;
@@ -624,7 +803,7 @@ void MainWindow::open() {
     if (!maybeSave()) return;
     QSettings s;
     QString path = QFileDialog::getOpenFileName(
-        this, "Open", s.value("lastDir").toString(),
+        this, "Open", prefs::startFolder(),
         "All supported (*.cmfx *.chemfox *.chemdoc *.json *.svg *.mol *.sdf *.smi);;ChemFox (*.cmfx *.chemfox *.chemdoc *.json);;"
         "SVG exported by ChemFox (*.svg);;Structures (*.mol *.sdf *.smi)");
     if (path.isEmpty()) return;
@@ -640,6 +819,7 @@ bool MainWindow::save() {
         return false;
     }
     canvas_->undoStack()->setClean();
+    QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
     statusBar()->showMessage("Saved " + path_);
     return true;
 }
@@ -647,7 +827,7 @@ bool MainWindow::save() {
 bool MainWindow::saveAs() {
     QSettings s;
     // New files are .cmfx; an open .chemfox file is offered back under its own name as .cmfx.
-    QString base = path_.isEmpty() ? s.value("lastDir").toString() + "/untitled"
+    QString base = path_.isEmpty() ? prefs::startFolder() + "/untitled"
                                    : QFileInfo(path_).absolutePath() + "/" + QFileInfo(path_).completeBaseName();
     QString path = QFileDialog::getSaveFileName(this, "Save As", base + ".cmfx",
                                                 "ChemFox (*.cmfx);;ChemFox, older extension (*.chemfox)");
@@ -707,11 +887,14 @@ void MainWindow::exportAs(const QString& kind) {
     else if (kind == "mol") ok = io::exportMol(path, d, &err);
     else if (kind == "emf") ok = io::exportEmf(path, d, r, ov, &err);
     else {
-        bool got = false;
-        int dpi = QInputDialog::getInt(this, "PNG resolution", "Dots per inch:", s.value("pngDpi", 300).toInt(), 72, 2400, 50, &got);
-        if (!got) return;
-        s.setValue("pngDpi", dpi);
-        ok = io::exportPng(path, d, r, ov, dpi, false, &err);
+        int dpi = s.value(prefs::kPngDpi, 300).toInt();
+        if (s.value(prefs::kPngAsk, true).toBool()) {  // Preferences → Export can turn this question off
+            bool got = false;
+            dpi = QInputDialog::getInt(this, "PNG resolution", "Dots per inch:", dpi, 72, 2400, 50, &got);
+            if (!got) return;
+            s.setValue(prefs::kPngDpi, dpi);
+        }
+        ok = io::exportPng(path, d, r, ov, dpi, s.value(prefs::kPngTransparent, false).toBool(), &err);
     }
     if (!ok) QMessageBox::warning(this, "Export", err.isEmpty() ? "Export failed." : err);
     else statusBar()->showMessage("Exported " + path + (canvas_->selection().isEmpty() ? "" : " (selection)"));
@@ -778,7 +961,7 @@ void MainWindow::showKeyReference() {
 <tr><th align=left>Target</th><th align=left>Key</th><th align=left>Action</th></tr>
 <tr><td>Atom</td><td>C N O S P F H</td><td>Change element</td></tr>
 <tr><td>Atom</td><td>l / b / i</td><td>Cl / Br / I</td></tr>
-<tr><td>Atom</td><td>Enter</td><td>Type a label (OMe, CO2Et, NHBoc)</td></tr>
+<tr><td>Atom</td><td>X</td><td>Type a label (OMe, CO2Et, NHBoc)</td></tr>
 <tr><td>Atom</td><td>+ / −</td><td>Increase / decrease charge</td></tr>
 <tr><td>Atom</td><td>.</td><td>Radical</td></tr>
 <tr><td>Atom</td><td>1 / 2 / 3</td><td>Grow a single / double / triple bond</td></tr>
@@ -789,11 +972,16 @@ void MainWindow::showKeyReference() {
 <tr><td>Bond</td><td>w / h / y</td><td>Wedge / hash / wavy (again: reverse)</td></tr>
 <tr><td>Bond</td><td>f</td><td>Flip wedge direction or double-bond side</td></tr>
 <tr><td>Bond</td><td>Shift+3…8</td><td>Fuse a ring of that size</td></tr>
+<tr><td>Atom / bond</td><td>m / Shift+M</td><td>Start a mechanism arrow / fishhook here; m again on its target finishes it</td></tr>
+<tr><td>Atom</td><td>Shift+L</td><td>Lone pairs: all the atom has, then one fewer each press, then none</td></tr>
+<tr><td>Atom</td><td>Double-click</td><td>Focus the atom: keys then add to it</td></tr>
 <tr><td>Arrow</td><td>Enter / k</td><td>Edit conditions / cycle arrow kind</td></tr>
+<tr><td>Mechanism arrow</td><td>k / f</td><td>Electron pair ↔ single electron / curve the other way</td></tr>
 <tr><td>Empty</td><td>C N O … / Shift+3…8 / r</td><td>New atom / ring / benzene at cursor</td></tr>
 <tr><td>Empty</td><td>a / t</td><td>New arrow / text</td></tr>
 <tr><td>Any</td><td>Delete</td><td>Remove hovered object</td></tr>
 <tr><td>Any</td><td>Tab</td><td>Cycle between overlapping hover targets</td></tr>
+<tr><td>Any</td><td>Shift+R</td><td>Rotate with a handle (15° steps)</td></tr>
 <tr><td>Global</td><td>Ctrl+Z / Ctrl+Shift+Z</td><td>Undo / redo</td></tr>
 <tr><td>Global</td><td>Ctrl+L</td><td>Clean structure (RDKit 2D layout)</td></tr>
 <tr><td>Global</td><td>Ctrl+Shift+A / Ctrl+Shift+N</td><td>Arrange scheme / number compounds</td></tr>
@@ -805,7 +993,8 @@ void MainWindow::showKeyReference() {
 <p>Drag from an atom → new bond (30° steps, fixed length); keep dragging → chain.<br>
 Drag on empty canvas → zig-zag chain. Hold Alt → no snapping.<br>
 Click → select molecule (Shift adds, Alt: single atom). Shift+drag → box select.<br>
-Drag a bond, or Ctrl+drag anything → move. Wheel → zoom. Middle/right drag or Space+drag → pan.</p>
+Drag a bond, or Ctrl+drag anything → move; hold Shift while moving for snap guides; Alt+drag → move a copy.<br>
+Wheel → zoom. Middle/right drag or Space+drag → pan.</p>
 <p>Every key and command is rebindable in <i>Edit → Keyboard Shortcuts</i> (Ctrl+Alt+K).</p>)";
     QDialog dlg(this);
     dlg.setWindowTitle("Keyboard Reference");
@@ -825,7 +1014,84 @@ void MainWindow::closeEvent(QCloseEvent* e) {
     QSettings s;
     s.setValue("window/geometry", saveGeometry());
     s.setValue("window/state", saveState());
+    autosave_.stop();
+    clearRecovery();  // closed normally: nothing to recover
     e->accept();
+}
+
+void MainWindow::writeRecovery() {
+    if (recoveryPath_.isEmpty()) return;
+    if (canvas_->undoStack()->isClean() || canvas_->doc().empty()) { clearRecovery(); return; }
+    QString err;
+    if (io::saveFile(recoveryPath_, canvas_->doc(), &err)) {
+        // Remember which file this was, so recovery can say so.
+        QFile meta(recoveryPath_ + ".txt");
+        if (meta.open(QIODevice::WriteOnly | QIODevice::Truncate)) meta.write(path_.toUtf8());
+    }
+}
+
+void MainWindow::clearRecovery() {
+    if (recoveryPath_.isEmpty()) return;
+    QFile::remove(recoveryPath_);
+    QFile::remove(recoveryPath_ + ".txt");
+}
+
+bool MainWindow::offerRecovery() {
+    // Copies whose window is gone: their lock file is free (or stale) and they aren't ours.
+    QDir dir(QFileInfo(recoveryPath_).absolutePath());
+    // Lock files left by a ChemFox that crashed with nothing unsaved: tidy them away.
+    for (const auto& fi : dir.entryInfoList({"unsaved-*.lock"}, QDir::Files)) {
+        if (QFile::exists(fi.absolutePath() + "/" + fi.completeBaseName() + ".cmfx")) continue;
+        QLockFile lock(fi.absoluteFilePath());
+        if (lock.tryLock(0)) lock.unlock();  // unlock removes the file; a live ChemFox keeps its lock
+    }
+    QFileInfoList orphans;
+    for (const auto& fi : dir.entryInfoList({"unsaved-*.cmfx"}, QDir::Files, QDir::Time)) {
+        if (fi.absoluteFilePath() == QFileInfo(recoveryPath_).absoluteFilePath()) continue;
+        QLockFile lock(fi.absolutePath() + "/" + fi.completeBaseName() + ".lock");
+        if (!lock.tryLock(0)) continue;  // that ChemFox is still running
+        lock.unlock();
+        orphans << fi;
+    }
+    if (orphans.isEmpty()) return false;
+    const QFileInfo newest = orphans.front();
+    QFile meta(newest.absoluteFilePath() + ".txt");
+    QString original;
+    if (meta.open(QIODevice::ReadOnly)) original = QString::fromUtf8(meta.readAll()).trimmed();
+    meta.close();
+    QMessageBox box(QMessageBox::Question, "Recover Unsaved Work",
+                    QString("ChemFox closed without saving %1 (last autosaved %2).\n\nOpen the recovered copy?")
+                        .arg(original.isEmpty() ? QString("an untitled document") : QFileInfo(original).fileName(),
+                             QLocale().toString(newest.lastModified(), QLocale::ShortFormat)),
+                    QMessageBox::NoButton, this);
+    QPushButton* recover = box.addButton("Recover", QMessageBox::AcceptRole);
+    QPushButton* discard = box.addButton("Discard", QMessageBox::DestructiveRole);
+    box.addButton("Not Now", QMessageBox::RejectRole);
+    box.exec();
+    auto removeAll = [&] {
+        for (const auto& fi : orphans) {
+            QFile::remove(fi.absoluteFilePath());
+            QFile::remove(fi.absoluteFilePath() + ".txt");
+            QFile::remove(fi.absolutePath() + "/" + fi.completeBaseName() + ".lock");
+        }
+    };
+    if (box.clickedButton() == discard) { removeAll(); return false; }
+    if (box.clickedButton() != recover) return false;
+    QString err;
+    auto d = io::loadFile(newest.absoluteFilePath(), &err);
+    if (!d) {
+        QMessageBox::warning(this, "Recover Unsaved Work", "Couldn't read the recovered copy: " + err);
+        return false;
+    }
+    canvas_->setDocument(*d);
+    canvas_->edit("Recovered", [](Document&) {});  // marks it unsaved, so closing asks to save
+    path_.clear();  // never overwrite the original silently: Save asks where
+    removeAll();
+    updateTitle();
+    syncStyleUi();
+    statusBar()->showMessage(original.isEmpty() ? QString("Recovered unsaved work.")
+                                                : "Recovered unsaved changes to " + original + ". Save to keep them.");
+    return true;
 }
 
 }  // namespace cd

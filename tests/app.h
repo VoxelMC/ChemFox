@@ -14,5 +14,8 @@ inline QApplication& testApp() {
                        true);
     (void)env;
     static QApplication app(argc, argv);
+    // Settings need an organization; a test-only one keeps tests away from the real ChemFox settings.
+    static bool named = (QCoreApplication::setOrganizationName("ChemFoxTests"), true);
+    (void)named;
     return app;
 }

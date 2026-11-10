@@ -1,0 +1,607 @@
+{
+    "format": "chemfox",
+    "objects": [
+        {
+            "atoms": [
+                {
+                    "charge": -1,
+                    "el": "O",
+                    "id": "a1",
+                    "label": null,
+                    "lonePairs": 3,
+                    "map": 5,
+                    "x": -2.1824,
+                    "y": -4.172
+                }
+            ],
+            "bonds": [
+            ],
+            "id": "m1",
+            "numberManual": true,
+            "smiles": "[OH-]",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a2",
+                    "label": null,
+                    "map": 1,
+                    "x": 0.0176,
+                    "y": -4.172
+                },
+                {
+                    "charge": 0,
+                    "el": "Br",
+                    "id": "a3",
+                    "label": null,
+                    "map": 2,
+                    "x": 1.0176,
+                    "y": -4.172
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a4",
+                    "label": null,
+                    "map": 3,
+                    "x": -0.4824,
+                    "y": -5.042
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a5",
+                    "label": null,
+                    "map": 4,
+                    "x": -0.4824,
+                    "y": -3.302
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "a2",
+                    "b": "a3",
+                    "id": "b1",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a2",
+                    "b": "a4",
+                    "id": "b2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a2",
+                    "b": "a5",
+                    "id": "b3",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m2",
+            "numberManual": true,
+            "smiles": "CC(C)Br",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "Br",
+                    "id": "a6",
+                    "label": null,
+                    "x": 7,
+                    "y": 0
+                },
+                {
+                    "charge": 0,
+                    "el": "Br",
+                    "id": "a7",
+                    "label": null,
+                    "x": 8,
+                    "y": 0
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "a6",
+                    "b": "a7",
+                    "id": "b4",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m3",
+            "smiles": "BrBr",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": -1,
+                    "el": "C",
+                    "id": "c1",
+                    "label": null,
+                    "lonePairs": 1,
+                    "x": 0,
+                    "y": 4
+                },
+                {
+                    "charge": 0,
+                    "el": "N",
+                    "id": "c2",
+                    "label": null,
+                    "x": -1,
+                    "y": 4
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "c1",
+                    "b": "c2",
+                    "id": "d1",
+                    "order": 3,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m4",
+            "smiles": "[C-]#N",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "c3",
+                    "label": null,
+                    "x": 2.5,
+                    "y": 4
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "c4",
+                    "label": null,
+                    "x": 2.5,
+                    "y": 3
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "c5",
+                    "label": null,
+                    "x": 3.37,
+                    "y": 4.5
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "c6",
+                    "label": null,
+                    "x": 1.63,
+                    "y": 4.5
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "c3",
+                    "b": "c4",
+                    "id": "d2",
+                    "order": 2,
+                    "stereo": "none"
+                },
+                {
+                    "a": "c3",
+                    "b": "c5",
+                    "id": "d3",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "c3",
+                    "b": "c6",
+                    "id": "d4",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m5",
+            "smiles": "CC(C)=O",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": -1,
+                    "el": "O",
+                    "id": "f1",
+                    "label": null,
+                    "lonePairs": 3,
+                    "x": 5.6,
+                    "y": 2.9
+                }
+            ],
+            "bonds": [
+            ],
+            "id": "m6",
+            "smiles": "[OH-]",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "f2",
+                    "label": null,
+                    "x": 7.5,
+                    "y": 4
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "f3",
+                    "label": null,
+                    "x": 8.5,
+                    "y": 4
+                },
+                {
+                    "charge": 0,
+                    "el": "H",
+                    "id": "f4",
+                    "label": null,
+                    "x": 7,
+                    "y": 3.13
+                },
+                {
+                    "charge": 0,
+                    "el": "Br",
+                    "id": "f5",
+                    "label": null,
+                    "x": 9,
+                    "y": 4.87
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "f6",
+                    "label": null,
+                    "x": 7,
+                    "y": 4.87
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "f7",
+                    "label": null,
+                    "x": 9,
+                    "y": 3.13
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "f2",
+                    "b": "f3",
+                    "id": "g1",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "f2",
+                    "b": "f4",
+                    "id": "g2",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "f3",
+                    "b": "f5",
+                    "id": "g3",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "f2",
+                    "b": "f6",
+                    "id": "g4",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "f3",
+                    "b": "f7",
+                    "id": "g5",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m7",
+            "smiles": "[H]C(C)C(C)Br",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a10",
+                    "label": null,
+                    "map": 1,
+                    "x": 9.1582,
+                    "y": -4.172
+                },
+                {
+                    "charge": 0,
+                    "el": "O",
+                    "id": "a11",
+                    "label": null,
+                    "map": 2,
+                    "x": 10.1582,
+                    "y": -4.172
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a12",
+                    "label": null,
+                    "map": 3,
+                    "x": 8.6582,
+                    "y": -5.042
+                },
+                {
+                    "charge": 0,
+                    "el": "C",
+                    "id": "a13",
+                    "label": null,
+                    "map": 4,
+                    "x": 8.6582,
+                    "y": -3.302
+                }
+            ],
+            "bonds": [
+                {
+                    "a": "a10",
+                    "b": "a11",
+                    "id": "b14",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a10",
+                    "b": "a12",
+                    "id": "b15",
+                    "order": 1,
+                    "stereo": "none"
+                },
+                {
+                    "a": "a10",
+                    "b": "a13",
+                    "id": "b16",
+                    "order": 1,
+                    "stereo": "none"
+                }
+            ],
+            "id": "m17",
+            "numberManual": true,
+            "smiles": "CC(C)O",
+            "type": "molecule"
+        },
+        {
+            "atoms": [
+                {
+                    "charge": -1,
+                    "el": "Br",
+                    "id": "a18",
+                    "label": null,
+                    "lonePairs": 4,
+                    "map": 5,
+                    "x": 6.9582,
+                    "y": -4.172
+                }
+            ],
+            "bonds": [
+            ],
+            "id": "m19",
+            "numberManual": true,
+            "smiles": "[Br-]",
+            "type": "molecule"
+        },
+        {
+            "above": "",
+            "below": "",
+            "id": "r20",
+            "kind": "forward",
+            "type": "arrow",
+            "x1": 2.2842,
+            "x2": 5.2842,
+            "y1": -4.172,
+            "y2": -4.172
+        },
+        {
+            "from": {
+                "atom": "a1",
+                "lonePair": true
+            },
+            "id": "e1",
+            "to": {
+                "atom": "a2"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "atom": "a2"
+            },
+            "id": "e2",
+            "shape": {
+                "c1": [
+                    -0.0495,
+                    -0.5027
+                ],
+                "c2": [
+                    -0.1775,
+                    -0.3849
+                ],
+                "from": [
+                    0.2473,
+                    -0.1461
+                ],
+                "to": [
+                    -0.1415,
+                    -0.4367
+                ]
+            },
+            "to": {
+                "atom": "a3"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "bond": "b4"
+            },
+            "head": "half",
+            "id": "e3",
+            "shape": {
+                "c1": [
+                    0.0753,
+                    -0.5127
+                ],
+                "c2": [
+                    0.1943,
+                    -0.5147
+                ],
+                "from": [
+                    0,
+                    -0.19
+                ],
+                "to": [
+                    -0.0203,
+                    -0.3674
+                ]
+            },
+            "to": {
+                "atom": "a6"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "bond": "b4"
+            },
+            "head": "half",
+            "id": "e4",
+            "to": {
+                "atom": "a7"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "atom": "c1",
+                "lonePair": true
+            },
+            "id": "e5",
+            "shape": {
+                "c1": [
+                    0.5104,
+                    -0.5522
+                ],
+                "c2": [
+                    -0.558,
+                    -0.4827
+                ],
+                "from": [
+                    0.2684,
+                    -0.4249
+                ],
+                "to": [
+                    -0.2281,
+                    0.0056
+                ]
+            },
+            "to": {
+                "bond": "d2"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "bond": "d2"
+            },
+            "id": "e6",
+            "to": {
+                "atom": "c4"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "atom": "f1",
+                "lonePair": true
+            },
+            "id": "e7",
+            "to": {
+                "atom": "f4"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "bond": "g2"
+            },
+            "id": "e8",
+            "to": {
+                "bond": "g1"
+            },
+            "type": "mechanism"
+        },
+        {
+            "from": {
+                "bond": "g3"
+            },
+            "id": "e9",
+            "to": {
+                "atom": "f5"
+            },
+            "type": "mechanism"
+        },
+        {
+            "id": "s21",
+            "steps": [
+                {
+                    "arrow": "r20",
+                    "diff": true,
+                    "manualMap": true,
+                    "noPlus": [
+                        "m1"
+                    ],
+                    "products": [
+                        "m19",
+                        "m17"
+                    ],
+                    "reactants": [
+                        "m1",
+                        "m2"
+                    ]
+                }
+            ],
+            "type": "scheme"
+        }
+    ],
+    "style": "default (custom)",
+    "styleText": "style \"default (custom)\" based on default\n\n  arrows\n    head length: 5 pt\n    head width: 2.8 pt\n\n  mechanism\n    head width: 1.45 pt\n    head length: 2.5 pt\n",
+    "version": 2,
+    "warnings": {
+        "suppressed": [
+        ],
+        "suppressedInstances": [
+        ]
+    }
+}

@@ -116,6 +116,43 @@ QPointF freeDirection(const Molecule& m, const QString& atomId) {
     return {std::cos(bestAng), std::sin(bestAng)};
 }
 
+std::vector<QPointF> lonePairDirections(const Molecule& m, const QString& atomId, int n, const std::vector<QPointF>& taken) {
+    std::vector<QPointF> out;
+    const Atom* a = m.atom(atomId);
+    if (!a || n <= 0) return out;
+    auto dir = [](double ang) { return QPointF(std::cos(ang), std::sin(ang)); };
+    std::vector<double> angs;
+    for (const auto& id : m.neighbors(atomId)) {
+        QPointF v = m.atom(id)->pos() - a->pos();
+        angs.push_back(std::atan2(v.y(), v.x()));
+    }
+    if (!angs.empty())  // (a lone atom keeps its tidy up/down/left/right; the caller orders those)
+        for (const auto& t : taken) angs.push_back(std::atan2(t.y(), t.x()));
+    if (angs.empty()) {
+        // A lone atom: above, below, left, right (y points down).
+        const double order[] = {-M_PI / 2, M_PI / 2, M_PI, 0};
+        for (int i = 0; i < n; ++i) out.push_back(dir(order[i % 4]));
+        return out;
+    }
+    std::sort(angs.begin(), angs.end());
+    // Hand the pairs out one at a time to the gap where they will be least crowded.
+    struct Gap { double start, size; int count = 0; };
+    std::vector<Gap> gaps;
+    for (size_t i = 0; i < angs.size(); ++i) {
+        double a1 = i + 1 < angs.size() ? angs[i + 1] : angs[0] + 2 * M_PI;
+        gaps.push_back({angs[i], a1 - angs[i]});
+    }
+    for (int i = 0; i < n; ++i) {
+        Gap* best = &gaps[0];
+        for (auto& g : gaps)
+            if (g.size / (g.count + 1) > best->size / (best->count + 1) + 1e-9) best = &g;
+        ++best->count;
+    }
+    for (const auto& g : gaps)
+        for (int i = 0; i < g.count; ++i) out.push_back(dir(g.start + g.size * (i + 1) / (g.count + 1)));
+    return out;
+}
+
 namespace {
 QPointF defaultBondDirection(const Molecule& m, const QString& atomId, int order);
 }
@@ -200,6 +237,11 @@ QPointF defaultBondDirection(const Molecule& m, const QString& atomId, int order
 }
 }  // namespace
 
+namespace {
+double g_snapStep = M_PI / 6;
+}
+double defaultSnapStep() { return g_snapStep; }
+void setDefaultSnapStep(double rad) { g_snapStep = rad > 0 ? rad : M_PI / 6; }
 double snapAngle(double rad, double step) { return std::round(rad / step) * step; }
 
 }  // namespace cd::geom

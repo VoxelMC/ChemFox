@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 # The version lives here only; it flows into the app, the installers and the release names.
-project(ChemFox VERSION 0.2.1 LANGUAGES CXX)
+project(ChemFox VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -109,7 +109,8 @@ find_package(Catch2 3 QUIET)
 if(Catch2_FOUND)
   file(GLOB test_srcs CONFIGURE_DEPENDS tests/*.cpp)
   add_executable(chemfox_tests ${test_srcs} src/app/ReactionBuilder.cpp src/app/ReactionBuilder.h
-    src/app/StyleEditor.cpp src/app/StyleEditor.h src/app/Shortcuts.cpp src/app/Shortcuts.h)
+    src/app/StyleEditor.cpp src/app/StyleEditor.h src/app/Shortcuts.cpp src/app/Shortcuts.h
+    src/app/Preferences.cpp src/app/Preferences.h)
   target_compile_definitions(chemfox_tests PRIVATE CHEMFOX_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
   target_link_libraries(chemfox_tests PRIVATE cd_editor cd_io cd_commands cd_warnings Catch2::Catch2WithMain)
   add_test(NAME chemfox_tests COMMAND chemfox_tests)
