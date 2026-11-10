@@ -13,6 +13,9 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -55,7 +58,7 @@ jobs:
           if-no-files-found: error
 
   macos:
-    runs-on: macos-latest   # Apple Silicon; add an Intel runner here if testers need one
+    runs-on: macos-15-intel   # Pin explicit stable image; osx-64 conda env resolves with current dependency pins
     defaults:
       run:
         shell: bash -el {0}
