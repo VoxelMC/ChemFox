@@ -80,6 +80,7 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
         if (!m.caption.isEmpty()) mo["caption"] = m.caption;
         if (m.showStereo) mo["showStereo"] = true;
         if (m.showCarbons) mo["showCarbons"] = true;
+        if (!m.aromatic.isEmpty()) mo["aromatic"] = m.aromatic;
         if (withSmiles) mo["smiles"] = chem::smiles(m);
         QJsonArray atoms, bonds;
         for (const auto& a : m.atoms) {
@@ -87,6 +88,7 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
             ao["label"] = a.label.isEmpty() ? QJsonValue() : QJsonValue(a.label);
             if (a.radical) ao["radical"] = a.radical;
             if (a.map) ao["map"] = a.map;
+            if (a.isotope) ao["isotope"] = a.isotope;
             atoms.append(ao);
         }
         for (const auto& b : m.bonds) {
@@ -124,6 +126,7 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
         QJsonObject to{{"id", t.id}, {"type", "text"}, {"x", round4(t.x)}, {"y", round4(t.y)}, {"text", t.text}};
         if (t.size > 0) to["size"] = t.size;
         if (!t.color.isEmpty()) to["color"] = t.color;
+        if (!t.align.isEmpty()) to["align"] = t.align;
         objects.append(to);
     }
     for (const auto& s : d.schemes) {
@@ -197,6 +200,7 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
             m.caption = ob.value("caption").toString();
             m.showStereo = ob.value("showStereo").toBool();
             m.showCarbons = ob.value("showCarbons").toBool();
+            m.aromatic = ob.value("aromatic").toString();
             for (const auto& av : ob.value("atoms").toArray()) {
                 QJsonObject ao = av.toObject();
                 Atom a;
@@ -208,6 +212,7 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
                 a.radical = ao.value("radical").toInt();
                 a.label = ao.value("label").toString();
                 a.map = ao.value("map").toInt();
+                a.isotope = ao.value("isotope").toInt();
                 m.atoms.push_back(a);
             }
             for (const auto& bv : ob.value("bonds").toArray()) {
@@ -289,6 +294,7 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
             t.text = ob.value("text").toString();
             t.size = ob.value("size").toDouble();
             t.color = ob.value("color").toString();
+            t.align = ob.value("align").toString();
             d.texts.push_back(t);
         } else if (type == "scheme") {
             Scheme s;

@@ -12,11 +12,25 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ### Added
 - Preferences (Edit → Preferences, Ctrl+,; ChemFox → Settings on macOS):
-  - General: the style for new documents, reopen the last document at startup, automatic update checks.
-  - Styles: your saved styles, with import, export, delete and open folder.
-  - Drawing: whether new bonds lean toward the mouse; scroll wheel pans (Ctrl+scroll zooms) for trackpads.
-  - Export: PNG resolution, whether to ask each time, transparent background.
+  - General: the style for new documents, the tool selected at startup, a folder for opening and saving
+    documents, reopen the last document at startup, automatic update checks.
+  - Styles: your saved styles with a preview, and import, export, rename, delete, use for new documents and
+    open folder.
+  - Drawing: whether new bonds lean toward the mouse; 30° or 15° steps for bonds drawn with the mouse; scroll
+    wheel pans (Ctrl+scroll zooms) for trackpads; the page width guide; a grid.
+  - Export: the format Ctrl+E saves as, PNG resolution, whether to ask each time, transparent background.
   - Keys: opens Keyboard Shortcuts and custom groups.
+- Crash recovery: unsaved work is copied every few minutes (Preferences → General), and if ChemFox closes
+  without saving, it offers the copy next time. Your own file is never overwritten by it.
+- More on the right-click menus:
+  - Atoms: charge, radical, isotope (¹³C, ²H), atom-map number, add or remove explicit H.
+  - Structures: group selected atoms as a label (Boc, R¹…); aromatic rings as circles or alternating double
+    bonds, per structure.
+  - Text: bold, italic, size, alignment and colour.
+  - Arrows: Edit in Reaction Builder.
+  - Everything: Duplicate, Bring to Front, Send to Back (also in the Edit menu: Ctrl+D, Ctrl+Shift+], Ctrl+Shift+[).
+  - Empty canvas: Arrange Scheme, Number Compounds, Style, Show Grid, Snap to Grid, Zoom to Fit, Actual Size.
+- A dot grid you can snap moved objects to (View menu, the right-click menu or Preferences). It's never exported.
 
 ## [0.2.1] - 2026-11-10
 

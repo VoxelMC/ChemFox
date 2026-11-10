@@ -113,8 +113,8 @@ QString Canvas::moleculeKey(const Molecule& m) const {
     QString k;
     k.reserve(int(m.atoms.size()) * 24);
     for (const auto& a : m.atoms)
-        k += QString("%1|%2|%3|%4|%5|%6|%7;").arg(a.id, a.el).arg(a.x, 0, 'f', 3).arg(a.y, 0, 'f', 3)
-                 .arg(a.charge).arg(a.radical).arg(a.label);
+        k += QString("%1|%2|%3|%4|%5|%6|%7|%8;").arg(a.id, a.el).arg(a.x, 0, 'f', 3).arg(a.y, 0, 'f', 3)
+                 .arg(a.charge).arg(a.radical).arg(a.label).arg(a.isotope);
     for (const auto& b : m.bonds) k += QString("%1-%2:%3:%4;").arg(b.a, b.b).arg(b.order).arg(int(b.stereo));
     return k;
 }
@@ -291,6 +291,24 @@ void Canvas::paintEvent(QPaintEvent*) {
     p.fillRect(rect(), style_.background);
     p.setRenderHint(QPainter::Antialiasing);
 
+    // Optional dot grid (Preferences → Drawing, or right-click empty canvas). Hidden when the dots
+    // would be closer than a few pixels.
+    if (showGrid_) {
+        const double step = gridSize_ * style_.bondLength * zoom_;  // screen pixels
+        if (step >= 6) {
+            QColor dot = style_.background.lightnessF() < 0.5 ? QColor(255, 255, 255, 70) : QColor(0, 0, 0, 70);
+            p.save();
+            p.setPen(QPen(dot, std::clamp(step / 12, 1.0, 2.0), Qt::SolidLine, Qt::RoundCap));
+            const QPointF o = toScreen(QPointF(0, 0));
+            const double x0 = std::fmod(o.x(), step) - step, y0 = std::fmod(o.y(), step) - step;
+            QVector<QPointF> pts;
+            for (double y = y0; y < height() + step; y += step)
+                for (double x = x0; x < width() + step; x += step) pts << QPointF(x, y);
+            p.drawPoints(pts.constData(), int(pts.size()));
+            p.restore();
+        }
+    }
+
     // Optional page-width guide (View menu): the style's page width, from a fixed origin,
     // which is where Arrange Scheme wraps rows.
     if (showPageGuide_) {
@@ -414,6 +432,18 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
         drag_ = Drag::Move;
         dragOrig_ = doc_;
         moveSet_ = std::move(set);
+        // What snaps to the grid: the atom or bond end under the mouse, an arrow's tail, a text's corner.
+        moveRef_ = pressModel_;
+        if (h.kind == Hit::AtomHit) {
+            if (const Molecule* m = doc_.moleculeOfAtom(h.id)) moveRef_ = m->atom(h.id)->pos();
+        } else if (h.kind == Hit::BondHit) {
+            if (const Molecule* m = doc_.molecule(h.molId))
+                if (const Bond* b = m->bond(h.id)) moveRef_ = m->atom(b->a)->pos();
+        } else if (h.kind == Hit::ArrowHit) {
+            if (const Arrow* a = doc_.arrow(h.id)) moveRef_ = a->tail();
+        } else if (h.kind == Hit::TextHit) {
+            for (const auto& t : doc_.texts) if (t.id == h.id) moveRef_ = QPointF(t.x, t.y);
+        }
     };
     if (mapMode_) {
         // Mapping mode only links atoms; everything else stays put.
@@ -557,7 +587,13 @@ void Canvas::mouseMoveEvent(QMouseEvent* e) {
     }
     case Drag::Move: {
         if (!dragMoved_) break;
-        edits::moveObjects(doc_, moveSet_, mp - lastDragModel_);
+        if (snapGrid_) {
+            // From the original positions, so the reference point lands exactly on a grid point.
+            doc_ = dragOrig_;
+            edits::moveObjects(doc_, moveSet_, snapToGrid(moveRef_ + (mp - pressModel_)) - moveRef_);
+        } else {
+            edits::moveObjects(doc_, moveSet_, mp - lastDragModel_);
+        }
         lastDragModel_ = mp;
         break;
     }
@@ -1526,6 +1562,19 @@ void Canvas::showContextMenu(QPointF screen) {
     QMenu menu(this);
     const QPointF cursor = toModel(screen);
 
+    // Duplicate and stacking order, for anything that can be selected.
+    auto addArrange = [&](QMenu* into, const QSet<QString>& ids) {
+        into->addAction("Duplicate", this, [this, ids] {
+            QSet<QString> copies;
+            edit("Duplicate", [&](Document& d) { copies = edits::duplicate(d, ids, QPointF(1.0, 1.0)); });
+            selected_ = copies;
+            update();
+            emit infoTargetChanged();
+        });
+        into->addAction("Bring to Front", this, [this, ids] { edit("Bring to front", [&](Document& d) { edits::restack(d, ids, true); }); });
+        into->addAction("Send to Back", this, [this, ids] { edit("Send to back", [&](Document& d) { edits::restack(d, ids, false); }); });
+    };
+
     auto addTransforms = [&](QMenu* into, const QSet<QString>& ids) {
         struct T { const char* name; double a, b, c, d; };
         const T ts[] = {{"Flip Horizontal", -1, 0, 0, 1}, {"Flip Vertical", 1, 0, 0, -1},
@@ -1558,6 +1607,45 @@ void Canvas::showContextMenu(QPointF screen) {
                 });
             }
             menu.addAction("Edit Label…", this, [this, atomId] { editLabel(atomId); });
+            auto* am = menu.addMenu("Atom");
+            const QList<QPair<QString, int>> charges = {{"Charge +1", 1}, {QString("Charge ") + QChar(0x2212) + "1", -1}, {"Neutral", 0}};
+            for (const auto& entry : charges) {
+                const QString label = entry.first;
+                const int q = entry.second;
+                QAction* act = am->addAction(label, this, [this, atomId, q] { edit("Charge", [&](Document& d) { edits::setCharge(d, atomId, q); }); });
+                act->setCheckable(true);
+                act->setChecked(a->charge == q);
+            }
+            QAction* rad = am->addAction("Radical", this, [this, atomId] { edit("Radical", [&](Document& d) { edits::toggleRadical(d, atomId); }); });
+            rad->setCheckable(true);
+            rad->setChecked(a->radical != 0);
+            am->addSeparator();
+            const int curIso = a->isotope, curMap = a->map;
+            const QString el = a->el;
+            am->addAction(curIso ? QString("Isotope (%1%2)…").arg(curIso).arg(el) : QString("Isotope…"), this, [this, atomId, curIso, el] {
+                bool ok = false;
+                int v = QInputDialog::getInt(this, "Isotope", QString("Mass number for %1 (0 = natural; 13 for carbon-13):").arg(el),
+                                             curIso, 0, 300, 1, &ok);
+                if (ok) edit("Isotope", [&](Document& d) { edits::setIsotope(d, atomId, v); });
+            });
+            am->addAction(curMap ? QString("Map Number (%1)…").arg(curMap) : QString("Map Number…"), this, [this, atomId, curMap] {
+                bool ok = false;
+                int v = QInputDialog::getInt(this, "Map number", "Reaction atom-map number (0 = unmapped):", curMap, 0, 999, 1, &ok);
+                if (ok) edit("Map number", [&](Document& d) { edits::setMapNumber(d, atomId, v); });
+            });
+            if (a->label.isEmpty()) {
+                am->addSeparator();
+                QAction* addH = am->addAction("Add Explicit H", this, [this, atomId] {
+                    edit("Add explicit H", [&](Document& d) { edits::addExplicitH(d, atomId); });
+                });
+                addH->setEnabled(overlay_.implicitH.value(atomId, 0) > 0);
+                bool anyH = false;
+                for (const auto& nb : m->neighbors(atomId)) anyH |= m->atom(nb)->el == "H" && m->atom(nb)->label.isEmpty();
+                if (anyH)
+                    am->addAction("Remove Explicit H", this, [this, atomId] {
+                        edit("Remove explicit H", [&](Document& d) { edits::removeExplicitH(d, atomId); });
+                    });
+            }
             menu.addSeparator();
         }
         if (h.kind == Hit::BondHit) {
@@ -1607,6 +1695,25 @@ void Canvas::showContextMenu(QPointF screen) {
                     for (const auto& a : anchors) if (d.molecule(molId)) edits::contractGroup(d, molId, a);
                 });
             });
+        // Group as label: the selected atoms of this structure (all of them if the whole structure is selected).
+        {
+            QSet<QString> atoms;
+            if (selected_.contains(molId)) for (const auto& at : m->atoms) atoms.insert(at.id);
+            else for (const auto& at : m->atoms) if (selected_.contains(at.id)) atoms.insert(at.id);
+            if (!atoms.isEmpty())
+                menu.addAction(QString("Group %1 Atom%2 as Label…").arg(atoms.size()).arg(atoms.size() == 1 ? "" : "s"), this, [this, atoms] {
+                    bool ok = false;
+                    QString label = QInputDialog::getText(this, "Group as label",
+                                                          "Label for the selected atoms (Boc, R1, Ar…):", QLineEdit::Normal, {}, &ok);
+                    if (!ok || label.trimmed().isEmpty()) return;
+                    QString err;
+                    Document probe = doc_;
+                    if (edits::groupAsLabel(probe, atoms, label, &err).isEmpty()) { emit status(err); return; }
+                    edit("Group as label", [&](Document& d) { edits::groupAsLabel(d, atoms, label); });
+                    selected_.clear();
+                    update();
+                });
+        }
         // Per-structure display toggles (apply to every structure in `ids`).
         auto toggle = [&](const QString& name, bool on, bool Molecule::*flag) {
             QAction* act = menu.addAction(name, this, [this, ids, on, flag, name] {
@@ -1620,6 +1727,18 @@ void Canvas::showContextMenu(QPointF screen) {
         menu.addSeparator();
         toggle("Show Stereo Labels (R/S, E/Z)", m->showStereo, &Molecule::showStereo);
         toggle("Show All Carbons", m->showCarbons, &Molecule::showCarbons);
+        if (!overlay_.aromaticRings.value(molId).empty()) {
+            auto* arom = menu.addMenu("Aromatic Rings");
+            const QList<QPair<QString, QString>> modes = {{"Style Default", ""}, {"Alternating Double Bonds", "kekule"}, {"Circles", "circles"}};
+            for (const auto& entry : modes) {
+                const QString label = entry.first, key = entry.second;
+                QAction* act = arom->addAction(label, this, [this, ids, key] {
+                    edit("Aromatic rings", [&](Document& d) { for (const auto& id : ids) if (Molecule* mm = d.molecule(id)) mm->aromatic = key; });
+                });
+                act->setCheckable(true);
+                act->setChecked(m->aromatic == key);
+            }
+        }
         menu.addSeparator();
         menu.addAction("Compound Name / Number…", this, [this, molId] { editCompound(molId); });
         auto* copyAs = menu.addMenu("Copy As");
@@ -1638,6 +1757,7 @@ void Canvas::showContextMenu(QPointF screen) {
         toRx->addAction("As Reagent (above the arrow)", this, [this, smi] { emit addToReaction(smi, 1); });
         toRx->addAction("As Product", this, [this, smi] { emit addToReaction(smi, 2); });
         menu.addSeparator();
+        addArrange(&menu, ids);
         menu.addAction("Delete Structure", this, [this, ids] {
             edit("Delete", [&](Document& d) { for (const auto& id : ids) edits::remove(d, id); });
         });
@@ -1645,6 +1765,11 @@ void Canvas::showContextMenu(QPointF screen) {
         const QString arrowId = h.id;
         const Arrow* a = doc_.arrow(arrowId);
         menu.addAction("Edit Conditions…", this, [this, arrowId] { editArrow(arrowId); });
+        menu.addAction("Edit in Reaction Builder", this, [this, arrowId] {
+            selected_ = {arrowId};
+            update();
+            emit editReaction(arrowId);
+        });
         auto* km = menu.addMenu("Kind");
         const QStringList kinds = {"Forward", "Equilibrium", "Retrosynthesis", "Dashed", "Crossed (no reaction)", "Resonance"};
         for (int k = 0; k < kinds.size(); ++k) {
@@ -1741,11 +1866,55 @@ void Canvas::showContextMenu(QPointF screen) {
         menu.addSeparator();
         addTransforms(&menu, transformTargets(h));
         menu.addSeparator();
+        addArrange(&menu, transformTargets(h));
+        menu.addSeparator();
         menu.addAction("Delete Arrow", this, [this, arrowId] { edit("Delete", [&](Document& d) { edits::remove(d, arrowId); }); });
     } else if (h.kind == Hit::TextHit || h.kind == Hit::NumberHit) {
         const QString id = h.id;
         if (h.kind == Hit::TextHit) {
+            const TextBox* tb = nullptr;
+            for (const auto& t : doc_.texts) if (t.id == id) tb = &t;
+            const QString text = tb ? tb->text : QString();
             menu.addAction("Edit Text…", this, [this, id] { editText(id); });
+            // Bold and italic wrap each line in markup (**bold**, *italic*), so they mix with styling typed by hand.
+            const bool bold = textlines::allBold(text), italic = textlines::allItalic(text);
+            QAction* b = menu.addAction("Bold", this, [this, id, bold, italic] {
+                edit("Bold", [&](Document& d) { d.text(id)->text = textlines::restyle(d.text(id)->text, !bold, italic); });
+            });
+            b->setCheckable(true);
+            b->setChecked(bold);
+            QAction* it = menu.addAction("Italic", this, [this, id, bold, italic] {
+                edit("Italic", [&](Document& d) { d.text(id)->text = textlines::restyle(d.text(id)->text, bold, !italic); });
+            });
+            it->setCheckable(true);
+            it->setChecked(italic);
+            auto* sm = menu.addMenu("Size");
+            const QList<double> sizes = {0, 7, 8, 9, 10, 12, 14, 18, 24, 36};
+            for (double sz : sizes) {
+                QAction* act = sm->addAction(sz == 0 ? QString("Style Default") : QString("%1 pt").arg(sz), this, [this, id, sz] {
+                    edit("Text size", [&](Document& d) { d.text(id)->size = sz; });
+                });
+                act->setCheckable(true);
+                act->setChecked(tb && std::abs(tb->size - sz) < 1e-6);
+            }
+            auto* al = menu.addMenu("Align");
+            const QList<QPair<QString, QString>> aligns = {{"Left", ""}, {"Centre", "center"}, {"Right", "right"}};
+            for (const auto& entry : aligns) {
+                const QString label = entry.first, key = entry.second;
+                QAction* act = al->addAction(label, this, [this, id, key] { edit("Align text", [&](Document& d) { d.text(id)->align = key; }); });
+                act->setCheckable(true);
+                act->setChecked(tb && tb->align == key);
+            }
+            const QString curColor = tb ? tb->color : QString();
+            menu.addAction("Colour…", this, [this, id, curColor] {
+                QColor c = QColorDialog::getColor(curColor.isEmpty() ? style_.textColor : QColor::fromString(curColor), this, "Text colour");
+                if (c.isValid()) edit("Text colour", [&](Document& d) { d.text(id)->color = c.name(); });
+            });
+            if (!curColor.isEmpty())
+                menu.addAction("Default Colour", this, [this, id] { edit("Text colour", [&](Document& d) { d.text(id)->color.clear(); }); });
+            menu.addSeparator();
+            addArrange(&menu, transformTargets(h));
+            menu.addSeparator();
             menu.addAction("Delete Text", this, [this, id] { edit("Delete", [&](Document& d) { edits::remove(d, id); }); });
         } else {
             menu.addAction("Compound Name / Number…", this, [this, id] { editCompound(id); });
@@ -1760,7 +1929,15 @@ void Canvas::showContextMenu(QPointF screen) {
                 if (const Molecule* m = doc_.moleculeOfAtom(id)) ids.insert(m->id);
                 else ids.insert(id);
             }
-            addTransforms(menu.addMenu("Selection"), ids);
+            auto* sel = menu.addMenu("Selection");
+            addTransforms(sel, ids);
+            sel->addSeparator();
+            addArrange(sel, ids);
+        }
+        if (!doc_.empty()) {
+            menu.addSeparator();
+            menu.addAction("Arrange Scheme", this, &Canvas::arrangeScheme);
+            menu.addAction("Number Compounds", this, &Canvas::numberCompounds);
         }
         menu.addSeparator();
         auto* tm = menu.addMenu("Insert Template");
@@ -1781,6 +1958,24 @@ void Canvas::showContextMenu(QPointF screen) {
             else insertMolecules(mols, cursor);
         });
         menu.addAction("Add Text Here…", this, [this, cursor] { addTextAt(cursor); });
+        menu.addSeparator();
+        auto* styleMenu = menu.addMenu("Style");
+        QStringList names = styles::availableNames();
+        if (!names.contains(doc_.styleName)) names << doc_.styleName;
+        for (const auto& n : names) {
+            QAction* act = styleMenu->addAction(n, this, [this, n] { setStyleName(n); });
+            act->setCheckable(true);
+            act->setChecked(n == doc_.styleName);
+        }
+        QAction* grid = menu.addAction("Show Grid", this, [this] { setGrid(!showGrid_, snapGrid_, gridSize_); emit gridChanged(); });
+        grid->setCheckable(true);
+        grid->setChecked(showGrid_);
+        QAction* snap = menu.addAction("Snap to Grid", this, [this] { setGrid(showGrid_, !snapGrid_, gridSize_); emit gridChanged(); });
+        snap->setCheckable(true);
+        snap->setChecked(snapGrid_);
+        menu.addSeparator();
+        menu.addAction("Zoom to Fit", this, &Canvas::zoomToFit);
+        menu.addAction("Actual Size", this, &Canvas::resetZoom);
     }
     menu.exec(mapToGlobal(screen.toPoint()));
 }
@@ -1803,6 +1998,44 @@ QStringList Canvas::commandIds() {
             "structure.collapseLabels", "copy.smiles", "copy.inchi", "copy.inchikey", "copy.mol", "copy.image",
             "arrow.swapText", "arrow.reverse", "arrow.straighten", "arrow.nextHead", "arrow.nextLine", "arrow.bothHeads",
             "arrow.toggleDiff", "reaction.continueRight", "reaction.continueLeft", "reaction.continueUp", "reaction.continueDown"};
+}
+
+void Canvas::setGrid(bool show, bool snap, double size) {
+    showGrid_ = show;
+    snapGrid_ = snap;
+    gridSize_ = std::clamp(size, 0.05, 5.0);
+    update();
+}
+
+QPointF Canvas::snapToGrid(QPointF model) const {
+    return {std::round(model.x() / gridSize_) * gridSize_, std::round(model.y() / gridSize_) * gridSize_};
+}
+
+QSet<QString> Canvas::actionTargets() const {
+    Hit h = mouseInside_ ? hover() : Hit{};
+    if (h.kind != Hit::None && h.kind != Hit::NumberHit) return transformTargets(h);
+    QSet<QString> ids;
+    for (const auto& s : selected_) {
+        if (const Molecule* m = doc_.moleculeOfAtom(s)) ids.insert(m->id);
+        else ids.insert(s);
+    }
+    return ids;
+}
+
+void Canvas::duplicateSelection() {
+    const QSet<QString> ids = actionTargets();
+    if (ids.isEmpty()) { emit status("Hover over or select something to duplicate."); return; }
+    QSet<QString> copies;
+    edit("Duplicate", [&](Document& d) { copies = edits::duplicate(d, ids, QPointF(1.0, 1.0)); });
+    selected_ = copies;
+    update();
+    emit infoTargetChanged();
+}
+
+void Canvas::restackSelection(bool toFront) {
+    const QSet<QString> ids = actionTargets();
+    if (ids.isEmpty()) { emit status("Hover over or select something first."); return; }
+    edit(toFront ? "Bring to front" : "Send to back", [&](Document& d) { edits::restack(d, ids, toFront); });
 }
 
 void Canvas::continueReaction(QPointF dir) {

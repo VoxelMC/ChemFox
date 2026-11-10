@@ -420,6 +420,76 @@ void toggleRadical(Document& d, const QString& atomId) {
     }
 }
 
+void setCharge(Document& d, const QString& atomId, int charge) {
+    if (Molecule* m = d.moleculeOfAtom(atomId)) m->atom(atomId)->charge = charge;
+}
+
+void setIsotope(Document& d, const QString& atomId, int massNumber) {
+    if (Molecule* m = d.moleculeOfAtom(atomId)) m->atom(atomId)->isotope = std::max(0, massNumber);
+}
+
+void setMapNumber(Document& d, const QString& atomId, int map) {
+    if (Molecule* m = d.moleculeOfAtom(atomId)) m->atom(atomId)->map = std::max(0, map);
+}
+
+QString addExplicitH(Document& d, QString atomId) {
+    if (!d.moleculeOfAtom(atomId)) return {};
+    QString h = growBond(d, atomId, 1);
+    if (!h.isEmpty()) setElement(d, h, "H");
+    return h;
+}
+
+int removeExplicitH(Document& d, const QString& atomId) {
+    Molecule* m = d.moleculeOfAtom(atomId);
+    if (!m) return 0;
+    QStringList hs;
+    for (const auto& nb : m->neighbors(atomId)) {
+        const Atom* a = m->atom(nb);
+        if (a->el == "H" && a->label.isEmpty() && a->isotope == 0 && m->neighbors(nb).size() == 1) hs << nb;
+    }
+    for (const auto& h : hs) remove(d, h);
+    return int(hs.size());
+}
+
+QString groupAsLabel(Document& d, const QSet<QString>& atomIds, const QString& label, QString* error) {
+    auto fail = [&](const QString& why) { if (error) *error = why; return QString(); };
+    if (label.trimmed().isEmpty()) return fail("Type a label for the group.");
+    if (atomIds.isEmpty()) return fail("Select the atoms to replace with a label.");
+    Molecule* m = d.moleculeOfAtom(*atomIds.begin());
+    if (!m) return fail("Select the atoms to replace with a label.");
+    for (const auto& id : atomIds)
+        if (!m->atom(id)) return fail("The atoms must all be in one structure.");
+    // The anchor is the selected atom bonded to the rest of the structure.
+    QString anchor;
+    int external = 0;
+    for (const auto& b : m->bonds) {
+        bool ina = atomIds.contains(b.a), inb = atomIds.contains(b.b);
+        if (ina == inb) continue;
+        ++external;
+        anchor = ina ? b.a : b.b;
+    }
+    if (external > 1) return fail("The selected atoms join the rest of the structure by more than one bond, so they can't become one label.");
+    if (anchor.isEmpty()) {  // the whole structure: keep its first selected atom (in drawing order)
+        for (const auto& a : m->atoms) if (atomIds.contains(a.id)) { anchor = a.id; break; }
+    }
+    const QString molId = m->id;
+    m->bonds.erase(std::remove_if(m->bonds.begin(), m->bonds.end(),
+                                  [&](const Bond& b) { return (atomIds.contains(b.a) && b.a != anchor) ||
+                                                              (atomIds.contains(b.b) && b.b != anchor); }),
+                   m->bonds.end());
+    m->atoms.erase(std::remove_if(m->atoms.begin(), m->atoms.end(),
+                                  [&](const Atom& a) { return atomIds.contains(a.id) && a.id != anchor; }),
+                   m->atoms.end());
+    Atom* a = m->atom(anchor);
+    a->charge = 0;
+    a->radical = 0;
+    a->isotope = 0;
+    for (auto& b : m->bonds) if (b.has(anchor)) b.stereo = BondStereo::None;
+    setLabel(d, anchor, label);
+    if (Molecule* mm = d.molecule(molId)) mm->pruneGroups();
+    return anchor;
+}
+
 void setBondOrder(Document& d, const QString& bondId, int order) {
     if (Molecule* m = d.moleculeOfBond(bondId)) {
         Bond* b = m->bond(bondId);
@@ -661,6 +731,44 @@ void contractGroup(Document& d, const QString& molId, const QString& anchorId) {
     m = d.molecule(molId);
     m->pruneGroups();
     splitFragments(d, molId);
+}
+
+QSet<QString> duplicate(Document& d, const QSet<QString>& ids, QPointF offset) {
+    QSet<QString> out;
+    std::vector<Molecule> mols;
+    std::vector<Arrow> arrows;
+    std::vector<TextBox> texts;
+    for (const auto& m : d.molecules) if (ids.contains(m.id)) mols.push_back(m);
+    for (const auto& a : d.arrows) if (ids.contains(a.id)) arrows.push_back(a);
+    for (const auto& t : d.texts) if (ids.contains(t.id)) texts.push_back(t);
+    for (auto m : mols) {
+        QHash<QString, QString> ren;
+        for (const auto& a : m.atoms) ren[a.id] = d.newId("a");
+        m.renameAtoms(ren);
+        for (auto& b : m.bonds) b.id = d.newId("b");
+        m.id = d.newId("m");
+        m.number.clear();
+        m.numberManual = false;
+        m.caption.clear();
+        m.translate(offset);
+        out.insert(m.id);
+        d.molecules.push_back(m);
+    }
+    for (auto a : arrows) { a.id = d.newId("r"); a.translate(offset); out.insert(a.id); d.arrows.push_back(a); }
+    for (auto t : texts) { t.id = d.newId("t"); t.x += offset.x(); t.y += offset.y(); out.insert(t.id); d.texts.push_back(t); }
+    return out;
+}
+
+void restack(Document& d, const QSet<QString>& ids, bool toFront) {
+    // Stable: the moved objects keep their order among themselves, and so do the rest.
+    auto apply = [&](auto& v) {
+        auto moved = [&](const auto& x) { return ids.contains(x.id); };
+        if (toFront) std::stable_partition(v.begin(), v.end(), [&](const auto& x) { return !moved(x); });
+        else std::stable_partition(v.begin(), v.end(), moved);
+    };
+    apply(d.molecules);
+    apply(d.arrows);
+    apply(d.texts);
 }
 
 void cycleArrowKind(Document& d, const QString& arrowId) {

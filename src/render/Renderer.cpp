@@ -121,7 +121,7 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
     const QStringList nbs = m.neighbors(a.id);
     const int deg = nbs.size();
     const bool plain = a.label.isEmpty();
-    if (plain && a.el == "C" && deg > 0 && !m.showCarbons) return L;  // implicit carbon
+    if (plain && a.el == "C" && deg > 0 && !m.showCarbons && a.isotope == 0) return L;  // implicit carbon
     L.visible = true;
 
     const FontSpec f = labelFont();
@@ -146,11 +146,17 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
         if (h > 1) hRuns.push_back({QString::number(h), Script::Sub});
         bool hFirst = deg == 0 ? QStringList{"O", "S", "Se", "F", "Cl", "Br", "I"}.contains(a.el) : flip;
         bool hVertical = deg >= 2 && std::abs(freeDir.y()) > 0.8;
+        // An isotope's mass number sits just before the element, as a superscript (13C, 2H).
+        std::vector<TextRun> iso;
+        if (a.isotope > 0) iso = {{QString::number(a.isotope), Script::Super}};
         if (!hRuns.empty() && !hVertical && hFirst) {
             prefix = hRuns;
-            main = hRuns;
+            prefix.insert(prefix.end(), iso.begin(), iso.end());
+            main = prefix;
             main.push_back({a.el});
         } else {
+            prefix = iso;
+            main = iso;
             main.push_back({a.el});
             if (!hVertical) main.insert(main.end(), hRuns.begin(), hRuns.end());
         }
@@ -326,7 +332,8 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
     // Aromatic circles replace alternating double bonds when the style asks for them.
     QSet<QString> circleBonds;
     std::vector<QStringList> circles;
-    if (s_.aromaticCircles) {
+    const bool useCircles = m.aromatic.isEmpty() ? s_.aromaticCircles : m.aromatic == "circles";
+    if (useCircles) {
         for (const auto& ring : ov.aromaticRings.value(m.id)) {
             circles.push_back(ring);
             for (int i = 0; i < ring.size(); ++i)
@@ -813,7 +820,13 @@ void Renderer::draw(QPainter& p, const Document& d, const ChemOverlay& ov, const
         if (deco && deco->editingId == t.id) continue;
         double y = r.top() + capHeight(f) + f.size * 0.1;
         for (const auto& l : t.text.split('\n')) {
-            drawRuns(p, labels::markupRuns(l), QPointF(r.left(), y), f, tc);
+            const auto runs = labels::markupRuns(l);
+            double x = r.left();
+            if (!t.align.isEmpty()) {
+                double spare = r.width() - runsWidth(runs, f);
+                x += t.align == "right" ? spare : t.align == "center" ? spare / 2 : 0;
+            }
+            drawRuns(p, runs, QPointF(x, y), f, tc);
             y += f.size * 1.25;
         }
     }

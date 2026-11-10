@@ -309,3 +309,47 @@ std::vector<TextRun> formulaRuns(const QString& text) {
 }
 
 }  // namespace cd::labels
+
+namespace cd::textlines {
+namespace {
+bool wrapped(const QString& l, const QString& m) {
+    return l.size() >= 2 * m.size() && l.startsWith(m) && l.endsWith(m);
+}
+// Peel whole-line markup off one line.
+QString plain(QString l, bool* bold, bool* italic) {
+    *bold = *italic = false;
+    if (wrapped(l, "**")) { *bold = true; l = l.mid(2, l.size() - 4); }
+    if (wrapped(l, "*") && !wrapped(l, "**")) { *italic = true; l = l.mid(1, l.size() - 2); }
+    return l;
+}
+template <typename F>
+bool every(const QString& text, F pred) {
+    bool any = false;
+    for (const auto& l : text.split('\n')) {
+        if (l.isEmpty()) continue;
+        bool b, i;
+        plain(l, &b, &i);
+        if (!pred(b, i)) return false;
+        any = true;
+    }
+    return any;
+}
+}  // namespace
+
+bool allBold(const QString& text) { return every(text, [](bool b, bool) { return b; }); }
+bool allItalic(const QString& text) { return every(text, [](bool, bool i) { return i; }); }
+
+QString restyle(const QString& text, bool bold, bool italic) {
+    QStringList out;
+    for (const auto& line : text.split('\n')) {
+        if (line.isEmpty()) { out << line; continue; }
+        bool b, i;
+        QString l = plain(line, &b, &i);
+        if (italic) l = "*" + l + "*";
+        if (bold) l = "**" + l + "**";
+        out << l;
+    }
+    return out.join('\n');
+}
+
+}  // namespace cd::textlines

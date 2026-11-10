@@ -116,6 +116,7 @@ Built build(const Molecule& m, bool withConformer, bool withMaps = false) {
         }
         RDKit::Atom at(atomicNum(a.el));
         at.setFormalCharge(a.charge);
+        if (a.isotope > 0) at.setIsotope(a.isotope);
         if (withMaps && a.map) at.setAtomMapNum(a.map);
         unsigned idx = mol.addAtom(&at, true, false);
         b.owner.push_back(a.id);
@@ -253,6 +254,7 @@ Molecule fromRd(RWMol& mol, bool computeCoords) {
         a.charge = at->getFormalCharge();
         a.radical = at->getNumRadicalElectrons();
         a.map = at->getAtomMapNum();
+        a.isotope = (int)at->getIsotope();
         m.atoms.push_back(a);
     }
     n = 0;
@@ -768,6 +770,7 @@ std::optional<Molecule> fromSmilesOrSmarts(const QString& text, QString* error) 
             RDKit::Atom na(at->getAtomicNum());
             na.setFormalCharge(at->getFormalCharge());
             na.setAtomMapNum(at->getAtomMapNum());
+            na.setIsotope(at->getIsotope());
             na.setIsAromatic(at->getIsAromatic());
             plain.addAtom(&na, true, false);
         }

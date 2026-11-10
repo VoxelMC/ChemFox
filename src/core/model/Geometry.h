@@ -36,7 +36,10 @@ QPointF newBondDirection(const Molecule& m, const QString& atomId, int order = 1
 // Direction pointing into the largest free angular gap around an atom.
 QPointF freeDirection(const Molecule& m, const QString& atomId);
 
+// The angle step for bonds and chains drawn with the mouse (Preferences → Drawing): 30° or 15°.
+double defaultSnapStep();
+void setDefaultSnapStep(double rad);
 // Snap an angle (radians) to the nearest multiple of `step`.
-double snapAngle(double rad, double step = M_PI / 6);
+double snapAngle(double rad, double step = defaultSnapStep());
 
 }  // namespace cd::geom

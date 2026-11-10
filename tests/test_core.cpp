@@ -630,3 +630,106 @@ TEST_CASE("updates: version comparison and picking the newest release") {
     CHECK(r.tag == "v0.2.1");  // the draft and the non-version tag are ignored
     CHECK(r.url == "https://x/v0.2.1");
 }
+TEST_CASE("atoms: isotopes, map numbers and explicit hydrogens") {
+    testApp();
+    Document d;
+    auto ids = edits::insertMolecules(d, {fromSmiles("CCO")}, {0, 0});
+    REQUIRE(ids.size() == 1);
+    const QString c = d.molecules[0].atoms[0].id;
+    const QString formula = chem::info(d.molecules[0]).formula;
+
+    // An explicit H changes the drawing, not the formula; removing it gives the same structure back.
+    QString h = edits::addExplicitH(d, c);
+    REQUIRE_FALSE(h.isEmpty());
+    CHECK(d.molecules[0].atoms.size() == 4);
+    CHECK(d.molecules[0].atom(h)->el == "H");
+    CHECK(chem::info(d.molecules[0]).formula == formula);
+    CHECK(edits::removeExplicitH(d, c) == 1);
+    CHECK(d.molecules[0].atoms.size() == 3);
+
+    // Isotope and map number: in SMILES, on the drawn label, and through save and reopen.
+    edits::setIsotope(d, c, 13);
+    edits::setMapNumber(d, c, 5);
+    CHECK(chem::smiles(d.molecules[0]).contains("13C"));
+    Style st;
+    Renderer r(st);
+    CHECK(r.atomLabel(d.molecules[0], *d.molecules[0].atom(c), ChemOverlay{}).visible);  // 13C shows even as a chain carbon
+    auto back = io::fromJson(io::toJson(d, false));
+    REQUIRE(back);
+    CHECK(back->molecules[0].atom(c)->isotope == 13);
+    CHECK(back->molecules[0].atom(c)->map == 5);
+    edits::setCharge(d, c, -1);
+    CHECK(d.molecules[0].atom(c)->charge == -1);
+}
+
+TEST_CASE("group as label, duplicate and stacking order") {
+    testApp();
+    Document d;
+    edits::insertMolecules(d, {fromSmiles("CC(=O)OCC")}, {0, 0});  // ethyl acetate, atoms in SMILES order
+    const Molecule& m = d.molecules[0];
+    const QString formula = chem::info(m).formula;
+    QStringList a;
+    for (const auto& at : m.atoms) a << at.id;
+
+    // Atoms joined to the rest by two bonds can't become one label.
+    QString err;
+    Document refused = d;
+    CHECK(edits::groupAsLabel(refused, {a[1], a[2]}, "X", &err).isEmpty());
+    CHECK_FALSE(err.isEmpty());
+
+    // The ethoxy part becomes an OEt label on its oxygen; the formula is unchanged.
+    QString anchor = edits::groupAsLabel(d, {a[3], a[4], a[5]}, "OEt", &err);
+    CHECK(anchor == a[3]);
+    REQUIRE(d.molecules.size() == 1);
+    CHECK(d.molecules[0].atoms.size() == 4);
+    CHECK(d.molecules[0].atom(anchor)->label == "OEt");
+    CHECK(chem::info(d.molecules[0]).formula == formula);
+
+    // Duplicates get fresh ids, sit at the offset, and don't copy the compound number.
+    d.molecules[0].number = "1";
+    const QString orig = d.molecules[0].id;
+    const QPointF c0 = d.molecules[0].center();
+    QSet<QString> copies = edits::duplicate(d, {orig}, QPointF(1, 1));
+    REQUIRE(copies.size() == 1);
+    REQUIRE(d.molecules.size() == 2);
+    const Molecule& dup = d.molecules[1];
+    CHECK(dup.id != orig);
+    CHECK(dup.number.isEmpty());
+    CHECK(dup.atoms[0].id != d.molecules[0].atoms[0].id);
+    CHECK(dup.center().x() == Approx(c0.x() + 1));
+
+    // Stacking: front moves to the end of the list (drawn last), back to the start; others keep their order.
+    Document t;
+    QString t1 = edits::addText(t, {0, 0}, "one"), t2 = edits::addText(t, {1, 0}, "two"), t3 = edits::addText(t, {2, 0}, "three");
+    edits::restack(t, {t1}, true);
+    CHECK(QStringList{t.texts[0].id, t.texts[1].id, t.texts[2].id} == QStringList{t2, t3, t1});
+    edits::restack(t, {t3}, false);
+    CHECK(QStringList{t.texts[0].id, t.texts[1].id, t.texts[2].id} == QStringList{t3, t2, t1});
+}
+
+TEST_CASE("text: whole-line bold and italic; alignment and aromatic display round-trip") {
+    testApp();
+    CHECK(textlines::restyle("Hello\nWorld", true, false) == "**Hello**\n**World**");
+    const QString both = textlines::restyle("**Hello**\n**World**", true, true);
+    CHECK(both == "***Hello***\n***World***");
+    CHECK(textlines::allBold(both));
+    CHECK(textlines::allItalic(both));
+    CHECK_FALSE(textlines::allItalic("**Hello**"));
+    CHECK(textlines::restyle(both, false, false) == "Hello\nWorld");
+    auto runs = labels::markupRuns("***Hello***");
+    REQUIRE_FALSE(runs.empty());
+    CHECK(runs[0].bold);
+    CHECK(runs[0].italic);
+
+    Document d;
+    edits::insertMolecules(d, {fromSmiles("c1ccccc1")}, {0, 0});
+    CHECK(styles::resolve("style \"x\" based on slides\n  aromatic circles: yes\n").aromaticCircles);
+    CHECK_FALSE(chem::analyze(d.molecules[0]).aromaticRings.empty());
+    d.molecules[0].aromatic = "circles";
+    QString tid = edits::addText(d, {0, 3}, "a\nlonger line");
+    d.text(tid)->align = "center";
+    auto back = io::fromJson(io::toJson(d, false));
+    REQUIRE(back);
+    CHECK(back->molecules[0].aromatic == "circles");
+    CHECK(back->texts[0].align == "center");
+}

@@ -200,6 +200,11 @@ QPointF defaultBondDirection(const Molecule& m, const QString& atomId, int order
 }
 }  // namespace
 
+namespace {
+double g_snapStep = M_PI / 6;
+}
+double defaultSnapStep() { return g_snapStep; }
+void setDefaultSnapStep(double rad) { g_snapStep = rad > 0 ? rad : M_PI / 6; }
 double snapAngle(double rad, double step) { return std::round(rad / step) * step; }
 
 }  // namespace cd::geom
