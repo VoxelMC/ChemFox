@@ -7,6 +7,7 @@ dependencies:
   # The C++ library only. Don't add the Python rdkit package or pin Boost: on macOS either one
   # forces an older ICU that conflicts with Qt (librdkit-dev already brings the Boost it needs).
   - librdkit-dev=2024.03.6
+  - libboost-devel  # Boost headers (RDKit's headers include them); unpinned so they match RDKit's Boost
   - qt6-main=6.12
   - cmake>=3.24
   - ninja
