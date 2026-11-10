@@ -9,7 +9,9 @@
 
 namespace cd::io {
 
-constexpr int kFormatVersion = 1;
+// Version 2 added mechanism arrows and lone pairs. A document that uses neither is still written
+// as version 1, so older ChemFox versions keep opening it.
+constexpr int kFormatVersion = 2;
 
 // `withSmiles` regenerates each molecule's SMILES so other tools can read the chemistry.
 QJsonObject toJsonObject(const Document& d, bool withSmiles = true);

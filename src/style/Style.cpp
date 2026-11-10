@@ -254,6 +254,11 @@ const QHash<QString, Setter>& setters() {
         {"arrows/color", col(&Style::arrowColor)},
         {"arrows/text gap", len(&Style::arrowTextGap)},
 
+        {"mechanism/width", len(&Style::mechWidth, kWidthWords)},
+        {"mechanism/head length", len(&Style::mechHeadLength)},
+        {"mechanism/head width", len(&Style::mechHeadWidth)},
+        {"mechanism/color", col(&Style::mechColor)},
+
         {"annotations/font", str(&Style::annotationFont)},
         {"annotations/size", len(&Style::annotationSize, kSizeWords)},
         {"annotations/color", col(&Style::annotationColor)},
@@ -292,7 +297,7 @@ const QHash<QString, Setter>& setters() {
     return t;
 }
 
-const QStringList kSections = {"arrows", "annotations", "numbers", "scheme", "residues", "text"};
+const QStringList kSections = {"arrows", "mechanism", "annotations", "numbers", "scheme", "residues", "text"};
 
 struct Header {
     QString name, base;

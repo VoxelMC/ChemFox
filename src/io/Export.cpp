@@ -55,6 +55,11 @@ Document subset(const Document& d, const QSet<QString>& ids) {
     }
     for (const auto& a : d.arrows) if (ids.contains(a.id)) out.arrows.push_back(a);
     for (const auto& t : d.texts) if (ids.contains(t.id)) out.texts.push_back(t);
+    // Mechanism arrows come along when the structures they join do (free ones only if picked themselves).
+    out.curved.clear();
+    for (const auto& c : d.curved)
+        if (c.from.attached() || c.to.attached() || ids.contains(c.id)) out.curved.push_back(c);
+    out.pruneCurved();
     out.pruneSchemes();
     return out;
 }

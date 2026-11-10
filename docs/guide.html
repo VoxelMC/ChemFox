@@ -74,7 +74,7 @@
     <kbd>Tab</kbd> cycles between them.</p>
   <p>The toolbar on the left has the tools for everything else: <b>Select</b> (<kbd>V</kbd>), <b>Chain</b> (<kbd>G</kbd>),
     <b>Arrow</b> (<kbd>Shift</kbd>+<kbd>A</kbd>), <b>Bent arrow</b> (<kbd>Shift</kbd>+<kbd>B</kbd>), <b>Text</b>
-    (<kbd>Shift</kbd>+<kbd>T</kbd>) and <b>Map</b> (<kbd>Ctrl</kbd>+<kbd>M</kbd>). With Select, dragging on empty canvas draws
+    (<kbd>Shift</kbd>+<kbd>T</kbd>), <b>Curved</b> mechanism arrows (<kbd>Shift</kbd>+<kbd>E</kbd>) and <b>Map</b> (<kbd>Ctrl</kbd>+<kbd>M</kbd>). With Select, dragging on empty canvas draws
     a selection box.</p>
   <div class="tip"><b>Moving around.</b> Scroll to zoom, <kbd>Shift</kbd>+scroll to pan sideways, and drag with the right or middle
     button (or hold <kbd>Space</kbd> and drag) to pan. <kbd>Ctrl</kbd>+<kbd>0</kbd> fits the drawing to the window.</div>
@@ -118,7 +118,7 @@
     <li>Use the <b>arrow keys</b> to move the focus to a neighbouring atom along a bond.</li>
     <li>Press <kbd>Esc</kbd> or click to finish.</li>
   </ol>
-  <p>To focus an atom of an existing structure, click the structure to select it, then click the atom.</p>
+  <p>To focus an atom of an existing structure, double-click it (or click the structure to select it, then click the atom).</p>
 
   <h2 id="groups"><a href="#groups">Labels and groups</a></h2>
   <ul>
@@ -136,9 +136,21 @@
   <h2 id="selecting"><a href="#selecting">Selecting and moving</a></h2>
   <ul>
     <li>Click a structure, arrow or text to select it; <kbd>Shift</kbd>+click adds to the selection; <kbd>Alt</kbd>+click selects a single atom.</li>
+    <li><b>Moving single atoms:</b> drag a selected atom (<kbd>Alt</kbd>+click it first, or box several) to move just the selected
+      atoms, or <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+drag any atom. A plain drag from an atom draws a bond.</li>
     <li>Drag a selection box on empty canvas; <kbd>Ctrl</kbd>+<kbd>A</kbd> selects everything.</li>
     <li>Drag a bond to move its structure, or <kbd>Ctrl</kbd>+drag anything to move it.</li>
     <li>Arrow keys nudge the selection (<kbd>Shift</kbd> for bigger steps). With a focused atom they move the focus instead.</li>
+    <li><b>Snap guides:</b> hold <kbd>Shift</kbd> while dragging a structure, arrow or text and it snaps to the edges, centres and
+      text baselines of everything else, and to equal spacing, with thin guide lines showing what it lines up with. Without
+      <kbd>Shift</kbd> dragging stays free.</li>
+    <li><b>Duplicate by dragging:</b> <kbd>Alt</kbd>+drag (<kbd>Option</kbd> on a Mac) moves a copy and leaves the original where it
+      was. On an atom this works once its structure is selected (otherwise <kbd>Alt</kbd>+drag from an atom draws a bond at any angle).</li>
+    <li><b>Align and distribute:</b> <b>Edit → Align and Distribute</b>, or right-click a selection: line objects up by their left
+      edges, centres, right edges, tops, middles or bottoms, or space three or more out evenly.</li>
+    <li><b>Rotate:</b> <kbd>Shift</kbd>+<kbd>R</kbd> over a structure (or with a selection), or <b>Rotate Freely…</b> on the right-click
+      menu, shows a round handle; drag it to turn in 15° steps (<kbd>Alt</kbd>: freely).</li>
+    <li><b>Straighten a bond:</b> right-click a bond → <b>Align Bond Horizontally</b> or <b>Vertically</b>; the structure turns with it.</li>
     <li><kbd>Delete</kbd> or <kbd>Backspace</kbd> deletes what's under the cursor, or the selection.</li>
   </ul>
 
@@ -155,11 +167,33 @@
     <li><kbd>K</kbd> cycles the arrow kind: forward, equilibrium, retrosynthetic, resonance and more. Right-click for colour, head and line styles.</li>
     <li>Drag an arrow's ends to re-anchor them; drag a bent arrow's corners and segments to reshape it.</li>
   </ul>
+  <h3>Mechanism arrows</h3>
+  <ul>
+    <li>Hover the atom, lone pair or bond the electrons come from and press <kbd>M</kbd>, then hover where they go and press
+      <kbd>M</kbd> again. <kbd>Shift</kbd>+<kbd>M</kbd> makes a fishhook (one electron). Press the second <kbd>M</kbd> on empty
+      canvas for an arrow that ends in free space; <kbd>Esc</kbd> cancels.</li>
+    <li>Or pick the <b>Curved</b> tool and drag from start to end (hold <kbd>Shift</kbd> for a fishhook), or click the start, then the end.</li>
+    <li>Each arrow starts with an automatic shape that you can then make your own. Select it to show two control handles: drag
+      them, or the curve itself, to shape it. Drag an end and it locks onto the nearest atom or bond (highlighted as you drag) at
+      exactly the spot you drop it, and keeps that place when the structure moves, rotates or flips. Right-click →
+      <b>Reset Shape</b> goes back to automatic. <kbd>F</kbd> curves it the other way and <kbd>K</kbd> switches between electron
+      pair and single electron.</li>
+    <li>Arrows stay attached when their structure is moved, flipped, rotated or cleaned, and go when the atom or bond they use is deleted.</li>
+    <li><b>Lone pairs:</b> <kbd>Shift</kbd>+<kbd>L</kbd> on an atom shows the lone pairs it really has (worked out from its bonds,
+      hydrogens, charge and radicals: two on an alcohol O, three on HO⁻, none on a sulfone S). Press again to show one fewer (just the
+      pair that reacts), down to none. An atom can never show more than it has: change it or its bonds and extra pairs disappear.
+      An arrow from an atom with lone pairs starts at the pair facing where it goes. Right-click an atom → <b>Atom → Lone Pairs</b>
+      to pick the number.</li>
+    <li>Line width, head size and colour are in the style (<b>mechanism</b> section); right-click an arrow for its own colour.</li>
+  </ul>
   <h3>Laying out a scheme</h3>
   <ul>
     <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>A</kbd> arranges the scheme, keeping each arrow's direction and converging routes. With a selection it tidies just that part.</li>
     <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> redraws products so the part they share with their reactant lines up.</li>
     <li><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>N</kbd> numbers compounds in scheme order; <kbd>Shift</kbd>+<kbd>N</kbd> on a structure edits its name and number.</li>
+    <li>Plus signs between structures are drawn for you. To remove one (say, in a mechanism drawn as one scene), hover it and press
+      <kbd>Delete</kbd>, or right-click → <b>Remove Plus Sign</b>; right-click the arrow → <b>Restore Plus Signs</b> to bring them back.</li>
+    <li><b>Reaction → Step Letters</b> letters every arrow a, b, c…; right-click an arrow → <b>Show Step Letter</b> to leave just that one out.</li>
   </ul>
   <h3>Reactions from text</h3>
   <p><b>Reaction → Reaction Builder</b> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>R</kbd>) builds a reaction from SMILES or SMARTS: one row
@@ -207,6 +241,8 @@
     <tr><td><kbd>+</kbd> <kbd>=</kbd> · <kbd>-</kbd></td><td>Raise · lower the charge</td></tr>
     <tr><td><kbd>.</kbd></td><td>Toggle a radical</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>Compound name and number</td></tr>
+    <tr><td><kbd>M</kbd> · <kbd>Shift</kbd>+<kbd>M</kbd></td><td>Start or end a mechanism arrow · a fishhook</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>L</kbd></td><td>Lone pairs: all the atom has, then one fewer each press, then none</td></tr>
   </table>
 
   <h3>On a bond</h3>
@@ -216,6 +252,13 @@
     <tr><td><kbd>F</kbd></td><td>Flip a wedge or a double bond's side</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Fuse a ring · benzene</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>N</kbd></td><td>Compound name and number</td></tr>
+    <tr><td><kbd>M</kbd> · <kbd>Shift</kbd>+<kbd>M</kbd></td><td>Start or end a mechanism arrow · a fishhook</td></tr>
+  </table>
+
+  <h3>On a mechanism arrow</h3>
+  <table>
+    <tr><td><kbd>K</kbd></td><td>Electron pair or single electron</td></tr>
+    <tr><td><kbd>F</kbd></td><td>Curve the other way</td></tr>
   </table>
 
   <h3>On an arrow, text or name</h3>
@@ -230,11 +273,14 @@
     <tr><td><kbd>Shift</kbd>+<kbd>3</kbd>…<kbd>8</kbd> · <kbd>R</kbd></td><td>Add a ring · benzene</td></tr>
     <tr><td><kbd>Shift</kbd>+<kbd>C</kbd></td><td>Add an acetyl</td></tr>
     <tr><td><kbd>A</kbd> · <kbd>T</kbd></td><td>Add an arrow · text</td></tr>
+    <tr><td><kbd>M</kbd> · <kbd>Shift</kbd>+<kbd>M</kbd></td><td>End a mechanism arrow here (free end)</td></tr>
   </table>
 
   <h3>Anywhere</h3>
   <table>
-    <tr><td><kbd>V</kbd> <kbd>G</kbd> <kbd>Shift</kbd>+<kbd>A</kbd> <kbd>Shift</kbd>+<kbd>B</kbd> <kbd>Shift</kbd>+<kbd>T</kbd></td><td>Select, Chain, Arrow, Bent arrow, Text tools</td></tr>
+    <tr><td><kbd>V</kbd> <kbd>G</kbd> <kbd>Shift</kbd>+<kbd>A</kbd> <kbd>Shift</kbd>+<kbd>B</kbd> <kbd>Shift</kbd>+<kbd>T</kbd> <kbd>Shift</kbd>+<kbd>E</kbd></td><td>Select, Chain, Arrow, Bent arrow, Text, Curved tools</td></tr>
+    <tr><td><kbd>Shift</kbd>+<kbd>R</kbd></td><td>Rotate with a handle (15° steps)</td></tr>
+    <tr><td><kbd>Shift</kbd>+drag · <kbd>Alt</kbd>+drag</td><td>Move with snap guides · move a copy</td></tr>
     <tr><td><kbd>Tab</kbd></td><td>Next of several overlapping targets</td></tr>
     <tr><td><kbd>Esc</kbd></td><td>Cancel, deselect, or finish with the focused atom</td></tr>
     <tr><td><kbd>Delete</kbd> <kbd>Backspace</kbd></td><td>Delete</td></tr>

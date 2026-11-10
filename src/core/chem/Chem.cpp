@@ -328,6 +328,21 @@ MolInfo info(const Molecule& m, bool withInchi) {
     return out;
 }
 
+void capLonePairs(Document& d) {
+    for (auto& m : d.molecules) {
+        bool any = false;
+        for (const auto& a : m.atoms) any |= a.lonePairs > 0;
+        if (!any) continue;
+        const Analysis an = analyze(m);
+        for (auto& a : m.atoms) {
+            if (a.lonePairs <= 0) continue;
+            a.lonePairs = std::min(a.lonePairs, an.lonePairs.value(a.id, 0));
+            if (a.lonePairs == 0)
+                for (auto& c : d.curved) if (c.from.atom == a.id) c.from.lonePair = false;
+        }
+    }
+}
+
 Analysis analyze(const Molecule& m) {
     Analysis out;
     if (m.atoms.empty()) return out;
@@ -341,6 +356,18 @@ Analysis analyze(const Molecule& m) {
     out.elementCounts = countElements(b, nullptr);
 
     for (const auto& a : m.atoms) {
+        // Lone pairs, labels included (the O of OMe): (outer electrons - valence - charge - radicals) / 2.
+        if (b.atomIdx.contains(a.id)) {
+            try {
+                auto* at = mol.getAtomWithIdx(b.atomIdx[a.id]);
+                if (!b.sanitized) at->updatePropertyCache(false);
+                const int outer = ptable()->getNouterElecs(at->getAtomicNum());
+                const int free = outer - int(at->getTotalValence()) - at->getFormalCharge() - int(at->getNumRadicalElectrons());
+                out.lonePairs[a.id] = std::clamp(free / 2, 0, 4);
+            } catch (...) {
+                out.lonePairs[a.id] = 0;
+            }
+        }
         if (!a.label.isEmpty()) continue;
         auto at = mol.getAtomWithIdx(b.atomIdx[a.id]);
         out.implicitH[a.id] = at->getTotalNumHs();

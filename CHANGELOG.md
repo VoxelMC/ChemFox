@@ -10,7 +10,41 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
 ### Added
+- Mechanism (curved) arrows for electron pushing (#4):
+  - Hover the atom, lone pair or bond the electrons come from and press M, then hover where they go and press M again;
+    Shift+M draws a fishhook (one electron). Or use the new Curved tool (Shift+E): drag from start to end, or click
+    one, then the other.
+  - Arrows stay attached to their atoms and bonds when structures are moved, flipped, rotated or cleaned, and are
+    removed with the atom or bond they use. Copy, paste, duplicate and undo all carry them.
+  - Each arrow starts with an automatic shape, which you can then shape freely: drag the curve to bend it, or drag
+    either of its two control handles (shown when it's selected). Drag an end and it locks onto the nearest atom or
+    bond (highlighted as you go) at exactly the spot you drop it, and keeps that place as the structure moves,
+    rotates or flips. Right-click → Reset Shape goes back to automatic. F curves it the other way and K switches
+    between electron pair and single electron.
+  - The head is the style's own arrowhead at half size; line width, head size and colour can be set in the style's
+    new `mechanism` section. Saved in `.cmfx` and exported to SVG, PDF, PNG and EMF. A new sample,
+    `mechanism.cmfx`, shows SN2, homolysis, addition to a ketone and E2.
+- Lone pairs: Shift+L on an atom shows the lone pairs it really has (from its bonds, hydrogens, charge and radicals,
+  as RDKit sees them), then one fewer each press, then none; or right-click → Atom → Lone Pairs. An atom never shows
+  more than it has. They sit square to the letter, clear of the hydrogens a label writes. An arrow from an atom
+  with lone pairs starts at the pair facing its target.
+- Moving single atoms: drag a selected atom (Alt+click selects one), or Ctrl+Alt+drag any atom.
+- Plus signs between structures in a step can be removed: hover one and press Delete, or right-click → Remove Plus
+  Sign (useful for a mechanism drawn as one scene). Right-click the arrow → Restore Plus Signs brings them back.
+- With Reaction → Step Letters on, right-click an arrow → Show Step Letter leaves just that arrow unlettered; the
+  others keep running a, b, c…
+- Smarter positioning (#9):
+  - Hold Shift while dragging structures, arrows or text to snap to the edges, centres and text baselines of other
+    objects and to equal spacing, with guide lines. Without Shift, dragging stays free.
+  - Alt+drag (Option on macOS) moves a copy and leaves the original, in one undo step.
+  - Align left, centre, right, top, middle or bottom, and distribute horizontally or vertically: Edit → Align and
+    Distribute, or the right-click menu of a selection.
+  - Right-click a bond → Align Bond Horizontally / Vertically turns its structure so the bond lies level or upright.
+  - Rotate freely: Shift+R over a structure (or with a selection), or Rotate Freely… on the right-click menu, shows a
+    handle that turns it in 15° steps (Alt: freely).
 - Preferences (Edit → Preferences, Ctrl+,; ChemFox → Settings on macOS):
   - General: the style for new documents, the tool selected at startup, a folder for opening and saving
     documents, reopen the last document at startup, automatic update checks.
@@ -33,9 +67,12 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 - A dot grid you can snap moved objects to (View menu, the right-click menu or Preferences). It's never exported.
 
 ### Changed
-- X on an atom types a label (it was Enter), and double-clicking an atom no longer opens the label editor.
+- X on an atom types a label (it was Enter), and double-clicking an atom focuses it (keys then add to it) instead of
+  opening the label editor.
   Keys you've rebound yourself are kept.
 - Charges move to a free corner of the atom instead of sitting on a bond.
+- Documents with mechanism arrows or lone pairs are saved as format version 2, which ChemFox 0.2 can't open. Documents
+  without them are still saved as version 1.
 - Group labels such as OMe colour only their bonding element when atom colours are on.
 
 ### Fixed

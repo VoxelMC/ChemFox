@@ -377,6 +377,52 @@ QString addArrow(Document& d, QPointF tail, double length) {
     return a.id;
 }
 
+QString addCurved(Document& d, const CurvedEnd& from, const CurvedEnd& to, bool half) {
+    if (!d.resolve(from, nullptr) || !d.resolve(to, nullptr)) return {};
+    // An arrow needs somewhere to go: not from a thing to itself.
+    if (from.attached() && from.atom == to.atom && from.bond == to.bond) return {};
+    CurvedArrow c;
+    c.id = d.newId("e");
+    c.from = from;
+    c.to = to;
+    c.to.lonePair = false;  // electrons arrive at the atom, not at one of its lone pairs
+    c.half = half;
+    if (c.from.lonePair)
+        if (Molecule* m = d.moleculeOfAtom(c.from.atom))
+            if (Atom* a = m->atom(c.from.atom); a->lonePairs == 0) a->lonePairs = 1;
+    d.curved.push_back(c);
+    return c.id;
+}
+
+void setLonePairs(Document& d, const QString& atomId, int n) {
+    Molecule* m = d.moleculeOfAtom(atomId);
+    if (!m) return;
+    m->atom(atomId)->lonePairs = std::clamp(n, 0, 4);
+    // An arrow can't start from a lone pair that is no longer drawn: it starts from the atom instead.
+    if (n <= 0)
+        for (auto& c : d.curved) if (c.from.atom == atomId) c.from.lonePair = false;
+}
+
+void cycleLonePairs(Document& d, const QString& atomId, int capacity) {
+    Molecule* m = d.moleculeOfAtom(atomId);
+    if (!m) return;
+    const Atom& a = *m->atom(atomId);
+    // All of them first, then one fewer each press (to show just the pair that reacts), then none.
+    int n = capacity <= 0 ? 0 : a.lonePairs == 0 ? capacity : std::min(a.lonePairs, capacity) - 1;
+    setLonePairs(d, atomId, n);
+}
+
+void alignBond(Document& d, const QString& bondId, bool vertical) {
+    Molecule* m = d.moleculeOfBond(bondId);
+    if (!m) return;
+    const Bond* b = m->bond(bondId);
+    const QPointF pa = m->atom(b->a)->pos(), pb = m->atom(b->b)->pos(), mid = (pa + pb) / 2;
+    // The smaller of the two turns that bring the bond onto the axis.
+    double ang = std::atan2(pb.y() - pa.y(), pb.x() - pa.x()), target = vertical ? M_PI / 2 : 0;
+    double turn = std::remainder(target - ang, M_PI);
+    transformAbout(d, {m->id}, mid, std::cos(turn), -std::sin(turn), std::sin(turn), std::cos(turn));
+}
+
 QString addText(Document& d, QPointF pos, const QString& text) {
     TextBox t;
     t.id = d.newId("t");
@@ -566,7 +612,22 @@ void splitFragments(Document& d, const QString& molId) {
     for (int c = 0; c < nComp; ++c) if (c != keep) d.molecules.push_back(extra[c]);
 }
 
+namespace {
+void removeObject(Document& d, const QString& id);
+bool endIn(const Document& d, const CurvedEnd& e, const QSet<QString>& molIds);
+}
+
 void remove(Document& d, const QString& id) {
+    const auto n = d.curved.size();
+    d.curved.erase(std::remove_if(d.curved.begin(), d.curved.end(), [&](const CurvedArrow& c) { return c.id == id; }),
+                   d.curved.end());
+    if (n != d.curved.size()) return;
+    removeObject(d, id);
+    d.pruneCurved();  // mechanism arrows go with the atom or bond they were attached to
+}
+
+namespace {
+void removeObject(Document& d, const QString& id) {
     if (Molecule* m = d.moleculeOfAtom(id)) {
         QStringList nbs = m->neighbors(id);
         m->bonds.erase(std::remove_if(m->bonds.begin(), m->bonds.end(), [&](const Bond& b) { return b.has(id); }),
@@ -610,7 +671,20 @@ void remove(Document& d, const QString& id) {
     if (before != d.molecules.size() + d.arrows.size() + d.texts.size()) d.pruneSchemes();
 }
 
+// Is this mechanism-arrow end attached to one of these molecules?
+bool endIn(const Document& d, const CurvedEnd& e, const QSet<QString>& molIds) {
+    const Molecule* m = !e.atom.isEmpty() ? d.moleculeOfAtom(e.atom) : !e.bond.isEmpty() ? d.moleculeOfBond(e.bond) : nullptr;
+    return m && molIds.contains(m->id);
+}
+}  // namespace
+
 void moveObjects(Document& d, const QSet<QString>& ids, QPointF delta) {
+    // A free end of a mechanism arrow goes along with the arrow, or with the structure its other end is on.
+    for (auto& c : d.curved) {
+        const bool own = ids.contains(c.id);
+        if (!c.from.attached() && (own || endIn(d, c.to, ids))) { c.from.x += delta.x(); c.from.y += delta.y(); }
+        if (!c.to.attached() && (own || endIn(d, c.from, ids))) { c.to.x += delta.x(); c.to.y += delta.y(); }
+    }
     for (auto& m : d.molecules) {
         if (ids.contains(m.id)) { m.translate(delta); continue; }
         QSet<QString> moved;
@@ -622,19 +696,43 @@ void moveObjects(Document& d, const QSet<QString>& ids, QPointF delta) {
     for (auto& t : d.texts) if (ids.contains(t.id)) { t.x += delta.x(); t.y += delta.y(); }
 }
 
-void transformObjects(Document& d, const QSet<QString>& ids, double m11, double m12, double m21, double m22) {
+bool transformCenter(const Document& d, const QSet<QString>& ids, QPointF* center) {
     QRectF box;
     auto grow = [&](QPointF p) { box |= QRectF(p, QSizeF(1e-6, 1e-6)); };
     for (const auto& m : d.molecules) if (ids.contains(m.id)) for (const auto& a : m.atoms) grow(a.pos());
     for (const auto& a : d.arrows) if (ids.contains(a.id)) for (const auto& p : a.path()) grow(p);
     for (const auto& t : d.texts) if (ids.contains(t.id)) grow({t.x, t.y});
-    if (box.isNull()) return;
-    const QPointF c = box.center();
+    if (box.isNull()) return false;
+    if (center) *center = box.center();
+    return true;
+}
+
+void transformObjects(Document& d, const QSet<QString>& ids, double m11, double m12, double m21, double m22) {
+    QPointF c;
+    if (!transformCenter(d, ids, &c)) return;
+    transformAbout(d, ids, c, m11, m12, m21, m22);
+}
+
+void transformAbout(Document& d, const QSet<QString>& ids, QPointF c, double m11, double m12, double m21, double m22) {
     auto map = [&](QPointF p) {
         QPointF v = p - c;
         return c + QPointF(m11 * v.x() + m12 * v.y(), m21 * v.x() + m22 * v.y());
     };
     const bool mirror = m11 * m22 - m12 * m21 < 0;
+    // Mechanism arrows: free ends turn with the arrow or with the structure at the other end, and a
+    // curve shaped by hand keeps its side of the structure through a mirror image.
+    for (auto& cv : d.curved) {
+        const bool own = ids.contains(cv.id), fromIn = endIn(d, cv.from, ids), toIn = endIn(d, cv.to, ids);
+        if (!cv.from.attached() && (own || toIn)) { QPointF p = map(cv.from.pos()); cv.from.x = p.x(); cv.from.y = p.y(); }
+        if (!cv.to.attached() && (own || fromIn)) { QPointF p = map(cv.to.pos()); cv.to.x = p.x(); cv.to.y = p.y(); }
+        if (mirror && (own || fromIn || toIn)) cv.bulge = -cv.bulge;
+        if (cv.shaped && (own || fromIn || toIn)) {
+            // A hand-set shape turns with its structure (the linear part only: offsets are relative).
+            auto lin = [&](QPointF v) { return QPointF(m11 * v.x() + m12 * v.y(), m21 * v.x() + m22 * v.y()); };
+            if (own || fromIn) { cv.fromOff = lin(cv.fromOff); cv.c1 = lin(cv.c1); }
+            if (own || toIn) { cv.toOff = lin(cv.toOff); cv.c2 = lin(cv.c2); }
+        }
+    }
     for (auto& m : d.molecules) {
         if (!ids.contains(m.id)) continue;
         for (auto& a : m.atoms) a.setPos(map(a.pos()));
@@ -741,11 +839,14 @@ QSet<QString> duplicate(Document& d, const QSet<QString>& ids, QPointF offset) {
     for (const auto& m : d.molecules) if (ids.contains(m.id)) mols.push_back(m);
     for (const auto& a : d.arrows) if (ids.contains(a.id)) arrows.push_back(a);
     for (const auto& t : d.texts) if (ids.contains(t.id)) texts.push_back(t);
+    const std::vector<CurvedArrow> curved = d.curved;
+    QHash<QString, QString> atomIds, bondIds;
     for (auto m : mols) {
         QHash<QString, QString> ren;
         for (const auto& a : m.atoms) ren[a.id] = d.newId("a");
+        atomIds.insert(ren);
         m.renameAtoms(ren);
-        for (auto& b : m.bonds) b.id = d.newId("b");
+        for (auto& b : m.bonds) { QString id = d.newId("b"); bondIds[b.id] = id; b.id = id; }
         m.id = d.newId("m");
         m.number.clear();
         m.numberManual = false;
@@ -754,8 +855,34 @@ QSet<QString> duplicate(Document& d, const QSet<QString>& ids, QPointF offset) {
         out.insert(m.id);
         d.molecules.push_back(m);
     }
+    out.unite(copyCurved(d, curved, atomIds, bondIds, offset, ids));
     for (auto a : arrows) { a.id = d.newId("r"); a.translate(offset); out.insert(a.id); d.arrows.push_back(a); }
     for (auto t : texts) { t.id = d.newId("t"); t.x += offset.x(); t.y += offset.y(); out.insert(t.id); d.texts.push_back(t); }
+    return out;
+}
+
+QSet<QString> copyCurved(Document& d, const std::vector<CurvedArrow>& src, const QHash<QString, QString>& atomIds,
+                         const QHash<QString, QString>& bondIds, QPointF offset, const QSet<QString>& ids) {
+    QSet<QString> out;
+    for (auto c : src) {
+        bool ok = true, anyAttached = false;
+        for (CurvedEnd* e : {&c.from, &c.to}) {
+            if (!e->atom.isEmpty()) {
+                anyAttached = true;
+                if (atomIds.contains(e->atom)) e->atom = atomIds[e->atom]; else ok = false;
+            } else if (!e->bond.isEmpty()) {
+                anyAttached = true;
+                if (bondIds.contains(e->bond)) e->bond = bondIds[e->bond]; else ok = false;
+            } else {
+                e->x += offset.x();
+                e->y += offset.y();
+            }
+        }
+        if (!ok || (!anyAttached && !ids.contains(c.id))) continue;
+        c.id = d.newId("e");
+        out.insert(c.id);
+        d.curved.push_back(c);
+    }
     return out;
 }
 
@@ -769,6 +896,7 @@ void restack(Document& d, const QSet<QString>& ids, bool toFront) {
     apply(d.molecules);
     apply(d.arrows);
     apply(d.texts);
+    apply(d.curved);
 }
 
 void cycleArrowKind(Document& d, const QString& arrowId) {

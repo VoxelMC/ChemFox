@@ -32,6 +32,9 @@ Keymap::Map Keymap::defaults() {
     atom["Shift+N"] = "number";
     atom["Shift+C"] = "group:Ac";
     atom["E"] = "expand";
+    atom["M"] = "curved:full";
+    atom["Shift+M"] = "curved:half";
+    atom["Shift+L"] = "lonepairs";
 
     auto& bond = m["bond"];
     bond["1"] = "order:1";
@@ -44,6 +47,12 @@ Keymap::Map Keymap::defaults() {
     for (int n = 3; n <= 8; ++n) bond[QString("Shift+%1").arg(n)] = QString("ring:%1").arg(n);
     bond["R"] = "benzene";
     bond["Shift+N"] = "number";
+    bond["M"] = "curved:full";
+    bond["Shift+M"] = "curved:half";
+
+    auto& mech = m["mechanism"];
+    mech["K"] = "head";
+    mech["F"] = "flip";
 
     auto& arrow = m["arrow"];
     arrow["Enter"] = "annotate";
@@ -62,6 +71,9 @@ Keymap::Map Keymap::defaults() {
     empty["Shift+C"] = "group:Ac";
     empty["A"] = "arrow";
     empty["T"] = "text";
+    // Ends a mechanism arrow at a free point (starting one needs an atom or bond).
+    empty["M"] = "curved:full";
+    empty["Shift+M"] = "curved:half";
 
     auto& any = m["any"];
     any["Delete"] = "delete";
@@ -74,6 +86,8 @@ Keymap::Map Keymap::defaults() {
     any["Shift+A"] = "tool:arrow";
     any["Shift+B"] = "tool:bent";
     any["Shift+T"] = "tool:text";
+    any["Shift+E"] = "tool:mechanism";
+    any["Shift+R"] = "rotate";
     return m;
 }
 
@@ -137,25 +151,27 @@ std::vector<std::pair<QString, QString>> Keymap::availableActions() {
     for (const auto& el : elements) out.push_back({"atom", "element:" + el});
     for (const char* a : {"label", "charge:+1", "charge:-1", "radical", "grow:1", "grow:2", "grow:3"}) out.push_back({"atom", a});
     for (int n = 3; n <= 8; ++n) out.push_back({"atom", QString("ring:%1").arg(n)});
-    for (const char* a : {"benzene", "number", "expand"}) out.push_back({"atom", a});
+    for (const char* a : {"benzene", "number", "expand", "curved:full", "curved:half", "lonepairs"}) out.push_back({"atom", a});
     for (const char* a : {"order:1", "order:2", "order:3", "stereo:wedge", "stereo:hash", "stereo:wavy", "flip"})
         out.push_back({"bond", a});
     for (int n = 3; n <= 8; ++n) out.push_back({"bond", QString("ring:%1").arg(n)});
-    for (const char* a : {"benzene", "number"}) out.push_back({"bond", a});
+    for (const char* a : {"benzene", "number", "curved:full", "curved:half"}) out.push_back({"bond", a});
+    out.push_back({"mechanism", "head"});
+    out.push_back({"mechanism", "flip"});
     out.push_back({"arrow", "annotate"});
     out.push_back({"arrow", "kind"});
     out.push_back({"text", "edit"});
     out.push_back({"number", "edit"});
     for (const auto& el : elements) out.push_back({"empty", "element:" + el});
     for (int n = 3; n <= 8; ++n) out.push_back({"empty", QString("ring:%1").arg(n)});
-    for (const char* a : {"benzene", "arrow", "text"}) out.push_back({"empty", a});
+    for (const char* a : {"benzene", "arrow", "text", "curved:full", "curved:half"}) out.push_back({"empty", a});
     // Groups: the common built-ins and every custom one, on atoms and on empty canvas.
     QStringList groups = {"Ac", "Me", "Et", "iPr", "tBu", "Ph", "Bn", "Bz", "Boc", "Cbz", "Ts", "TBS",
                           "OH", "OMe", "OAc", "NH2", "CO2H", "CO2Me", "CO2Et", "CHO", "CN", "CF3", "NO2"};
     for (const auto& g : labels::customGroups().keys()) if (!groups.contains(g)) groups << g;
     for (const char* t : {"atom", "empty"})
         for (const auto& g : groups) out.push_back({t, "group:" + g});
-    for (const char* a : {"delete", "cycle", "escape", "tool:select", "tool:chain", "tool:arrow", "tool:bent", "tool:text", "mapmode"})
+    for (const char* a : {"delete", "cycle", "escape", "tool:select", "tool:chain", "tool:arrow", "tool:bent", "tool:text", "tool:mechanism", "mapmode", "rotate"})
         out.push_back({"any", a});
     return out;
 }
@@ -164,10 +180,14 @@ QString Keymap::describe(const QString& action) {
     const QString verb = action.section(':', 0, 0), arg = action.section(':', 1);
     static const QHash<QString, QString> plain = {
         {"label", "Type a label"}, {"radical", "Toggle radical"}, {"benzene", "Benzene ring"},
-        {"number", "Compound name / number"}, {"flip", "Flip wedge or double-bond side"},
+        {"number", "Compound name / number"},
         {"annotate", "Edit conditions"}, {"kind", "Next arrow kind"}, {"edit", "Edit"}, {"arrow", "New arrow"},
         {"text", "New text"}, {"delete", "Delete"}, {"cycle", "Next overlapping target"}, {"escape", "Cancel / deselect"},
-        {"mapmode", "Toggle mapping mode"}, {"expand", "Expand / collapse group label"}};
+        {"mapmode", "Toggle mapping mode"}, {"expand", "Expand / collapse group label"},
+        {"lonepairs", "Lone pairs: all, then fewer, then none"}, {"head", "Electron pair / single electron"},
+        {"flip", "Flip wedge, double-bond side or curve"}, {"rotate", "Rotate with a handle (15° steps)"}};
+    if (action == "curved:full") return "Mechanism arrow (start, then end)";
+    if (action == "curved:half") return "Fishhook arrow (start, then end)";
     if (plain.contains(verb)) return plain[verb];
     if (verb == "element") return "Element " + arg;
     if (verb == "charge") return arg.startsWith('+') ? "Increase charge" : "Decrease charge";

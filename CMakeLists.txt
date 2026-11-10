@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 # The version lives here only; it flows into the app, the installers and the release names.
-project(ChemFox VERSION 0.2.1 LANGUAGES CXX)
+project(ChemFox VERSION 0.3.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

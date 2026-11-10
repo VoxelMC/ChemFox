@@ -43,6 +43,18 @@ struct Style {
     QColor arrowColor = Qt::black;
     double arrowTextGap = 3.6;    // clearance between an arrow's head and the text above/below it
 
+    // Mechanism (curved) arrows. Unset (0 / invalid), they follow the reaction arrows: the same line, a
+    // slimmer head. So a style that scales its arrows up (slides, posters) scales these too.
+    double mechWidth = 0;
+    double mechHeadLength = 0;
+    double mechHeadWidth = 0;     // half the width of the head, like arrowHeadWidth
+    QColor mechColor;
+    double mechanismWidth() const { return mechWidth > 0 ? mechWidth : arrowWidth; }
+    // The reaction arrows' head, half the size.
+    double mechanismHeadLength() const { return mechHeadLength > 0 ? mechHeadLength : arrowHeadLength * 0.5; }
+    double mechanismHeadWidth() const { return mechHeadWidth > 0 ? mechHeadWidth : arrowHeadWidth * 0.5; }
+    QColor mechanismColor() const { return mechColor.isValid() ? mechColor : arrowColor; }
+
     QString annotationFont = "Arial";
     double annotationSize = 9.0;
     QColor annotationColor = Qt::black;

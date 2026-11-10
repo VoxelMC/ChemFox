@@ -75,6 +75,7 @@ void Canvas::edit(const QString& text, const std::function<void(Document&)>& fn,
     fitPending_ = false;
     Document after = doc_;
     fn(after);
+    chem::capLonePairs(after);  // an edit can take lone pairs away (O to C, a new bond, a charge)
     // Keep compound numbers in scheme order as things change.
     bool autoNumbers = !after.schemes.empty() &&
                        std::any_of(after.molecules.begin(), after.molecules.end(),
@@ -101,7 +102,10 @@ void Canvas::documentReplaced() {
     }
     for (const auto& a : doc_.arrows) live.insert(a.id);
     for (const auto& t : doc_.texts) live.insert(t.id);
+    for (const auto& c : doc_.curved) live.insert(c.id);
     selected_.intersect(live);
+    rotateIds_.intersect(live);
+    if (curvedPending_ && !doc_.resolve(curvedFrom_, nullptr)) curvedPending_ = false;
     recompute();
     if (drag_ == Drag::None) updateHover(lastMouse_);
     update();
@@ -211,6 +215,16 @@ std::vector<Hit> Canvas::hitTest(QPointF screen) const {
     }
     for (const auto& t : doc_.texts)
         if (renderer_.textRect(t).adjusted(-2, -2, 2, 2).contains(pt)) hits.push_back({Hit::TextHit, t.id, {}, 0.1});
+    for (const auto& ps : renderer_.plusSigns(doc_, overlay_))
+        if (ps.rect.adjusted(-2, -2, 2, 2).contains(pt)) hits.push_back({Hit::PlusHit, ps.id(), {}, 0.12});
+    for (const auto& c : doc_.curved) {
+        const CurvedGeom g = renderer_.curvedGeom(c, doc_, overlay_);
+        if (!g.ok) continue;
+        double d = 1e9;
+        for (size_t i = 0; i + 1 < g.points.size(); ++i) d = std::min(d, distToSegment(pt, g.points[i], g.points[i + 1]));
+        d /= style_.bondLength;
+        if (d < std::max(0.2, 5 * px)) hits.push_back({Hit::CurvedHit, c.id, {}, d + 0.03});
+    }
     std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) { return a.dist < b.dist; });
     return hits;
 }
@@ -243,6 +257,8 @@ QString Canvas::hoverTargetName(const Hit& h) const {
     case Hit::ArrowHit: return "arrow";
     case Hit::TextHit: return "text";
     case Hit::NumberHit: return "number";
+    case Hit::CurvedHit: return "mechanism";
+    case Hit::PlusHit: return "plus";
     default: return {};
     }
 }
@@ -260,7 +276,7 @@ void Canvas::updateStatus() {
         const Atom* a = doc_.molecule(h.molId)->atom(h.id);
         QString what = a->label.isEmpty() ? a->el : a->label;
         emit status(QString("Atom %1 — C N O S P F H, l b i: element · Enter: label · +/−: charge · 1 2 3: grow bond · "
-                            "Shift+3…8: ring · r: benzene · drag: new bond%2").arg(what, more));
+                            "Shift+3…8: ring · r: benzene · drag: new bond · Ctrl+Alt+drag (or drag once selected): move it%2").arg(what, more));
         break;
     }
     case Hit::BondHit:
@@ -271,11 +287,16 @@ void Canvas::updateStatus() {
         emit status("Arrow — Enter: conditions · k: arrow kind · drag ends to resize · bent arrows: drag a corner or leg to reshape, Ctrl+drag to move · right-click: more" + more);
         break;
     case Hit::TextHit: emit status("Text — Enter: edit" + more); break;
+    case Hit::PlusHit: emit status("Plus sign — Delete: remove it · right-click: more" + more); break;
+    case Hit::CurvedHit:
+        emit status("Mechanism arrow — drag the curve or its control handles to shape it · drag an end onto an atom or bond to "
+                    "attach it there · K: electron pair / single electron · F: flip side · right-click: Reset Shape and more" + more);
+        break;
     case Hit::NumberHit: emit status("Compound number — Enter: edit number or caption" + more); break;
     default: {
         static const char* drags[] = {"drag: select", "drag: draw a chain", "drag: draw an arrow",
                                       "click corners, double-click or Enter to finish the bent arrow",
-                                      "click: add text"};
+                                      "click: add text", "drag from an atom or bond to where the electrons go"};
         emit status(QString("Empty canvas — %1 · C N O…: atom · Shift+3…8: ring · r: benzene · a: arrow · t: text · "
                             "drag from an atom: bond · Ctrl+drag: move · wheel: zoom · middle/Space drag: pan")
                         .arg(drags[int(tool_)]));
@@ -330,6 +351,8 @@ void Canvas::paintEvent(QPaintEvent*) {
     Hit h = hover();
     if (drag_ == Drag::None || drag_ == Drag::BondFromAtom || drag_ == Drag::MapLink)
         deco.hoverId = h.kind == Hit::NumberHit ? "num:" + h.id : h.id;
+    else if (drag_ == Drag::DrawCurved || drag_ == Drag::CurvedFrom || drag_ == Drag::CurvedTo)
+        deco.hoverId = curvedTarget_.id;  // where the arrow end will attach
     deco.selected = selected_;
     deco.forceMaps = mapMode_;
     if (mapMode_ || doc_.showMaps) {
@@ -362,6 +385,43 @@ void Canvas::paintEvent(QPaintEvent*) {
             p.setBrush(QColor(232, 152, 0));
             p.drawEllipse(g.head + QPointF(4, -6), style_.bondLength * 0.09, style_.bondLength * 0.09);
         }
+    }
+
+    // A mechanism arrow waiting for its second key: a dashed line from where it starts to the mouse.
+    if (curvedPending_ && mouseInside_ && drag_ == Drag::None) {
+        QPointF s;
+        if (doc_.resolve(curvedFrom_, &s)) {
+            QPen pen(QColor(230, 140, 20), style_.lineWidth, Qt::DashLine, Qt::RoundCap);
+            pen.setCosmetic(false);
+            p.setPen(pen);
+            p.drawLine(renderer_.toPt(s), toPt(lastMouse_));
+        }
+    }
+    // Snap guides while Shift+dragging.
+    if (!guides_.empty()) {
+        QPen gp(QColor(230, 60, 160), 1);
+        gp.setCosmetic(true);
+        p.setPen(gp);
+        for (const auto& g : guides_) p.drawLine(g);
+    }
+    // Rotation handle: a line up from the centre to a round grip.
+    if (!rotateIds_.isEmpty()) {
+        QPointF hp = renderer_.toPt(rotateHandle()), cp = renderer_.toPt(rotateCenter_);
+        if (drag_ != Drag::Rotate) {
+            QRectF b;
+            for (const auto& id : rotateIds_) b |= objectRect(id);
+            cp = b.center();
+        }
+        QPen rp(QColor(66, 133, 244), 1.2);
+        rp.setCosmetic(true);
+        p.setPen(rp);
+        p.setBrush(Qt::NoBrush);
+        p.drawLine(cp, hp);
+        const double k = 4 / zoom_;
+        p.drawLine(cp - QPointF(k, 0), cp + QPointF(k, 0));
+        p.drawLine(cp - QPointF(0, k), cp + QPointF(0, k));
+        p.setBrush(Qt::white);
+        p.drawEllipse(hp, 6 / zoom_, 6 / zoom_);
     }
 
     if (preview_.size() >= 2) {
@@ -431,6 +491,11 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
     auto startMove = [&](QSet<QString> set) {
         drag_ = Drag::Move;
         dragOrig_ = doc_;
+        moveBase_ = doc_;
+        altDuplicate_ = false;
+        dupMade_ = false;
+        atomMove_ = false;
+        guides_.clear();
         moveSet_ = std::move(set);
         // What snaps to the grid: the atom or bond end under the mouse, an arrow's tail, a text's corner.
         moveRef_ = pressModel_;
@@ -450,8 +515,26 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
         drag_ = h.kind == Hit::AtomHit ? Drag::MapLink : Drag::None;
         return;
     }
+    // The rotation handle, while it is shown; a press anywhere else puts it away.
+    if (!rotateIds_.isEmpty()) {
+        if (len(modelToScreen(rotateHandle()) - e->position()) < 10) {
+            QRectF b;
+            for (const auto& id : rotateIds_) b |= objectRect(id);
+            rotateCenter_ = renderer_.toModel(b.center());
+            rotateReach_ = b.height() / 2;
+            const QPointF v = rotateHandle() - rotateCenter_;
+            rotateStart_ = std::atan2(v.y(), v.x());
+            rotateShown_ = 0;
+            dragOrig_ = doc_;
+            drag_ = Drag::Rotate;
+            return;
+        }
+        rotateIds_.clear();
+        update();
+    }
     // Arrow tools draw wherever you press, even over structures.
     if (tool_ == Tool::Arrow) { drag_ = Drag::DrawArrow; return; }
+    if (tool_ == Tool::Mechanism && !(mods & Qt::ControlModifier)) { drag_ = Drag::DrawCurved; return; }
     if (tool_ == Tool::BentArrow) {
         bentPts_.push_back(bentSnap(pressModel_, !(mods & Qt::AltModifier)));
         drag_ = Drag::None;
@@ -462,6 +545,19 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
         drag_ = Drag::None;
         addTextAt(pressModel_);
         return;
+    }
+    // The handles of a hovered or selected mechanism arrow: its ends (drag to move or re-attach) and its two
+    // control points (drag to shape the curve).
+    if (!(mods & Qt::ControlModifier)) {
+        QString cid;
+        const int which = curvedHandleAt(e->position(), &cid);
+        if (which >= 0) {
+            pressHit_ = {Hit::CurvedHit, cid, {}, 0};
+            dragOrig_ = doc_;
+            static const Drag kinds[] = {Drag::CurvedFrom, Drag::CurvedTo, Drag::CurvedC1, Drag::CurvedC2};
+            drag_ = kinds[which];
+            return;
+        }
     }
     // Arrow ends win over anything else close by (an arrow usually points right at an atom).
     if (!(mods & Qt::ControlModifier)) {
@@ -474,7 +570,24 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
             return;
         }
     }
+    // Atoms move on their own: drag a selected atom (Alt+click selects one, a selection box several) to move
+    // the selected atoms, or Ctrl+Alt+drag any atom. A plain drag from an atom still draws a bond.
+    if (h.kind == Hit::AtomHit) {
+        const bool ctrlAlt = (mods & Qt::ControlModifier) && (mods & Qt::AltModifier);
+        if (ctrlAlt || (selected_.contains(h.id) && !(mods & (Qt::ControlModifier | Qt::AltModifier)))) {
+            startMove(selected_.contains(h.id) ? selected_ : QSet<QString>{h.id});
+            atomMove_ = true;
+            return;
+        }
+    }
     if ((mods & Qt::ControlModifier) && h.kind != Hit::None) { startMove(moveSetFor(h)); return; }
+    // Alt+drag (Option on macOS) moves a copy and leaves the original. On an atom only when its structure
+    // is selected: otherwise Alt+drag from an atom draws a bond at any angle.
+    if (mods & Qt::AltModifier) {
+        const bool dup = h.kind == Hit::BondHit || h.kind == Hit::ArrowHit || h.kind == Hit::TextHit ||
+                         h.kind == Hit::CurvedHit || (h.kind == Hit::AtomHit && selected_.contains(h.molId));
+        if (dup) { startMove(moveSetFor(h)); altDuplicate_ = true; return; }
+    }
     if ((mods & Qt::ShiftModifier) && h.kind == Hit::None) { drag_ = Drag::Rubber; rubber_ = {}; return; }
 
     switch (h.kind) {
@@ -504,6 +617,7 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
         break;
     }
     case Hit::TextHit: startMove(moveSetFor(h)); break;
+    case Hit::CurvedHit: dragOrig_ = doc_; drag_ = Drag::CurvedBulge; break;  // drag the curve to reshape it
     case Hit::NumberHit: drag_ = Drag::None; break;
     default:
         // Empty canvas: marquee select, or a chain with the Chain tool.
@@ -587,14 +701,93 @@ void Canvas::mouseMoveEvent(QMouseEvent* e) {
     }
     case Drag::Move: {
         if (!dragMoved_) break;
-        if (snapGrid_) {
-            // From the original positions, so the reference point lands exactly on a grid point.
-            doc_ = dragOrig_;
-            edits::moveObjects(doc_, moveSet_, snapToGrid(moveRef_ + (mp - pressModel_)) - moveRef_);
-        } else {
-            edits::moveObjects(doc_, moveSet_, mp - lastDragModel_);
+        if (altDuplicate_ && !dupMade_) {
+            // The first movement of an Alt+drag makes the copies; from here on they are what moves.
+            dupMade_ = true;
+            QSet<QString> objs;
+            for (const auto& id : moveSet_) {
+                if (const Molecule* m = dragOrig_.moleculeOfAtom(id)) objs.insert(m->id);
+                else if (const Molecule* m = dragOrig_.moleculeOfBond(id)) objs.insert(m->id);
+                else objs.insert(id);
+            }
+            moveBase_ = dragOrig_;
+            moveSet_ = edits::duplicate(moveBase_, objs, QPointF(0, 0));
         }
+        // Always from the starting positions, so grid and guide snapping land exactly.
+        QPointF delta = mp - pressModel_;
+        if (snapGrid_) delta = snapToGrid(moveRef_ + delta) - moveRef_;
+        doc_ = moveBase_;
+        guides_.clear();
+        if (e->modifiers() & Qt::ShiftModifier) delta += snapGuideDelta(moveSet_, delta);
+        edits::moveObjects(doc_, moveSet_, delta);
         lastDragModel_ = mp;
+        break;
+    }
+    case Drag::DrawCurved: {
+        if (!dragMoved_ || (pressHit_.kind != Hit::AtomHit && pressHit_.kind != Hit::BondHit)) break;
+        QPointF s, end;
+        curvedTarget_ = curvedTargetAt(pos, mp, &end);
+        if (doc_.resolve(endFor(pressHit_, pressModel_), &s)) preview_ = {s, end};
+        break;
+    }
+    case Drag::CurvedFrom:
+    case Drag::CurvedTo: {
+        if (!dragMoved_) break;
+        // The end follows the mouse, locking onto the nearest atom or bond (highlighted) at exactly the spot it's
+        // over: that offset is kept, so it moves with the structure. Out in the open it's a free end.
+        doc_ = dragOrig_;
+        CurvedArrow* c = doc_.curvedArrow(pressHit_.id);
+        if (!c) break;
+        const bool tip = drag_ == Drag::CurvedTo;
+        curvedTarget_ = curvedTargetAt(pos, mp, nullptr);
+        CurvedEnd ne = endFor(curvedTarget_, mp);
+        const CurvedEnd& other = tip ? c->from : c->to;
+        if (ne.attached() && ne.atom == other.atom && ne.bond == other.bond) {  // not onto its own other end
+            curvedTarget_ = {};
+            ne = endFor(Hit{}, mp);
+        }
+        ne.lonePair = false;  // placed by hand: it sits where it was put
+        QPointF anchor;
+        doc_.resolve(ne, &anchor);
+        const QPointF offset = ne.attached() ? mp - anchor : QPointF(0, 0);
+        *c = withShape(*c, doc_);
+        if (tip) { c->to = ne; c->toOff = offset; }
+        else { c->from = ne; c->fromOff = offset; }
+        preview_.clear();
+        break;
+    }
+    case Drag::CurvedBulge: {
+        if (!dragMoved_) break;
+        doc_ = dragOrig_;
+        CurvedArrow* c = doc_.curvedArrow(pressHit_.id);
+        if (!c) break;
+        // Dragging the curve bends it: both control points move so its middle follows the mouse (a cubic's
+        // middle moves three quarters as far as its control points).
+        *c = withShape(*c, doc_);
+        const QPointF delta = (mp - pressModel_) / 0.75;
+        c->c1 += delta;
+        c->c2 += delta;
+        break;
+    }
+    case Drag::CurvedC1:
+    case Drag::CurvedC2: {
+        if (!dragMoved_) break;
+        doc_ = dragOrig_;
+        CurvedArrow* c = doc_.curvedArrow(pressHit_.id);
+        if (!c) break;
+        *c = withShape(*c, doc_);
+        (drag_ == Drag::CurvedC1 ? c->c1 : c->c2) += mp - pressModel_;
+        break;
+    }
+    case Drag::Rotate: {
+        if (!dragMoved_) break;
+        const QPointF v = mp - rotateCenter_;
+        double ang = std::atan2(v.y(), v.x()) - rotateStart_;
+        if (snap) ang = snapAngle(ang, M_PI / 12);  // 15° steps; Alt turns freely
+        rotateShown_ = ang;
+        doc_ = dragOrig_;
+        edits::transformAbout(doc_, rotateIds_, rotateCenter_, std::cos(ang), -std::sin(ang), std::sin(ang), std::cos(ang));
+        emit status(QString("Rotate %1°  (15° steps; hold Alt to turn freely)").arg(std::round(ang * 180 / M_PI)));
         break;
     }
     case Drag::ArrowHead:
@@ -661,6 +854,7 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e) {
     const bool shift = e->modifiers() & Qt::ShiftModifier;
     Drag d = drag_;
     drag_ = Drag::None;
+    curvedTarget_ = {};
     unsetCursor();
     if (spaceDown_) setCursor(Qt::OpenHandCursor);
     else if (mapMode_ || tool_ != Tool::Select) setCursor(tool_ == Tool::Text && !mapMode_ ? Qt::IBeamCursor : Qt::CrossCursor);
@@ -728,19 +922,79 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e) {
         edit("Add chain", [&](Document& doc) { edits::addChain(doc, std::nullopt, start, mp, snap, endAtom); });
         break;
     }
+    case Drag::Rotate: {
+        Document after = doc_;
+        doc_ = dragOrig_;
+        rotateShown_ = 0;
+        if (dragMoved_) undo_.push(new SnapshotCommand(this, "Rotate", dragOrig_, after));
+        break;
+    }
     case Drag::Move:
     case Drag::ArrowHead:
     case Drag::ArrowTail:
     case Drag::ArrowCorner:
-    case Drag::ArrowSegment: {
+    case Drag::ArrowSegment:
+    case Drag::CurvedBulge:
+    case Drag::CurvedC1:
+    case Drag::CurvedC2:
+    case Drag::CurvedFrom:
+    case Drag::CurvedTo: {
+        guides_.clear();
+        if (!dragMoved_ && atomMove_) {
+            // A click on a selected atom focuses it, as before: keys then act on it.
+            doc_ = dragOrig_;
+            if (selected_.contains(pressHit_.id) && !shift) {
+                stickyAtom_ = pressHit_.id;
+                updateHover(pos);
+                emit status("Focused atom: keys act on it, arrow keys move to a neighbour, Esc finishes.");
+            } else {
+                clickSelect(pressHit_.id);
+            }
+            break;
+        }
         if (!dragMoved_) {
             doc_ = dragOrig_;
-            clickSelect(pressHit_.molId.isEmpty() ? pressHit_.id : pressHit_.molId);
+            const bool atomOnly = altDuplicate_ && pressHit_.kind == Hit::AtomHit;
+            clickSelect(atomOnly || pressHit_.molId.isEmpty() ? pressHit_.id : pressHit_.molId);
             break;
         }
         Document after = doc_;
         doc_ = dragOrig_;
-        undo_.push(new SnapshotCommand(this, d == Drag::Move ? "Move" : "Reshape arrow", dragOrig_, after));
+        const QString what = d == Drag::Move ? (altDuplicate_ ? "Duplicate" : atomMove_ ? "Move atom" : "Move")
+                             : (d == Drag::CurvedBulge || d == Drag::CurvedC1 || d == Drag::CurvedC2) ? "Shape mechanism arrow"
+                             : (d == Drag::CurvedFrom || d == Drag::CurvedTo) ? "Move mechanism arrow end"
+                                                                               : "Reshape arrow";
+        undo_.push(new SnapshotCommand(this, what, dragOrig_, after));
+        if (d == Drag::Move && altDuplicate_) { selected_ = moveSet_; emit infoTargetChanged(); }
+        break;
+    }
+    case Drag::DrawCurved: {
+        const bool half = shift;
+        if (!dragMoved_) {
+            // Click, click: the first click picks the start, the second the end.
+            if (curvedPending_) finishCurved(pressHit_, pressModel_);
+            else if (pressHit_.kind == Hit::AtomHit || pressHit_.kind == Hit::BondHit) {
+                curvedFrom_ = endFor(pressHit_, pressModel_);
+                curvedHalf_ = half;
+                curvedPending_ = true;
+                emit status("Mechanism arrow: now click (or press M over) where the electrons go · Esc cancels");
+            } else if (pressHit_.kind == Hit::CurvedHit) {
+                clickSelect(pressHit_.id);
+            } else {
+                if (!shift) selected_.clear();
+                emit infoTargetChanged();
+            }
+            break;
+        }
+        if (pressHit_.kind != Hit::AtomHit && pressHit_.kind != Hit::BondHit) break;
+        auto hits = hitTest(pos);
+        auto target = std::find_if(hits.begin(), hits.end(), [&](const Hit& x) {
+            return x.kind != Hit::CurvedHit && x.id != pressHit_.id;
+        });
+        curvedFrom_ = endFor(pressHit_, pressModel_);
+        curvedHalf_ = half;
+        curvedPending_ = true;
+        finishCurved(target != hits.end() ? *target : Hit{}, mp);
         break;
     }
     case Drag::Rubber: {
@@ -756,6 +1010,9 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e) {
         }
         for (const auto& a : doc_.arrows) if (r.intersects(renderer_.arrowGeom(a, &doc_).bounds)) selected_.insert(a.id);
         for (const auto& t : doc_.texts) if (r.intersects(renderer_.textRect(t))) selected_.insert(t.id);
+        for (const auto& c : doc_.curved)
+            if (const CurvedGeom g = renderer_.curvedGeom(c, doc_, overlay_); g.ok && r.contains(g.start) && r.contains(g.tip))
+                selected_.insert(c.id);
         rubber_ = {};
         emit infoTargetChanged();
         break;
@@ -790,7 +1047,14 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e) {
     updateHover(e->position());
     Hit h = hover();
     switch (h.kind) {
-    case Hit::AtomHit: break;  // labels are typed with X (or right-click → Edit Label…), not double-click
+    case Hit::AtomHit:
+        // Focus it (orange): keys then add to it, as when building a chain from the keyboard.
+        // (Labels are typed with X, or right-click → Edit Label….)
+        stickyAtom_ = h.id;
+        updateHover(e->position());
+        update();
+        emit status("Focused atom: keys act on it, arrow keys move to a neighbour, Esc finishes.");
+        break;
     case Hit::BondHit: selected_ = {h.molId}; update(); break;
     case Hit::ArrowHit: editArrow(h.id); break;
     case Hit::TextHit: editText(h.id); break;
@@ -881,14 +1145,27 @@ void Canvas::keyPressEvent(QKeyEvent* e) {
     if (drag_ != Drag::None && key != "Escape") return;
     if (key == "Escape" && drag_ != Drag::None) {
         if (drag_ == Drag::Move || drag_ == Drag::ArrowHead || drag_ == Drag::ArrowTail || drag_ == Drag::ArrowCorner ||
-            drag_ == Drag::ArrowSegment)
+            drag_ == Drag::ArrowSegment || drag_ == Drag::CurvedBulge || drag_ == Drag::CurvedC1 || drag_ == Drag::CurvedC2 ||
+            drag_ == Drag::CurvedFrom || drag_ == Drag::CurvedTo || drag_ == Drag::Rotate)
             doc_ = dragOrig_;
+        guides_.clear();
         drag_ = Drag::None;
         preview_.clear();
         update();
         return;
     }
 
+    if (key == "Escape" && curvedPending_) {
+        curvedPending_ = false;
+        emit status("Mechanism arrow cancelled.");
+        update();
+        return;
+    }
+    if (key == "Escape" && !rotateIds_.isEmpty()) {
+        rotateIds_.clear();
+        update();
+        return;
+    }
     if (key == "Escape" && !stickyAtom_.isEmpty()) {
         // Ends a keyboard chain (and deselects, as Escape always does).
         stickyAtom_.clear();
@@ -915,6 +1192,7 @@ void Canvas::keyPressEvent(QKeyEvent* e) {
 void Canvas::applyToSelection(const QString& key) {
     QString any = keymap_.action("any", key);
     if (any == "delete") { deleteSelection(); return; }
+    if (any == "rotate") { startRotate(); return; }
     if (any == "escape") {
         if (mapMode_) { setMapMode(false); return; }
         selected_.clear();
@@ -965,12 +1243,32 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
 
     if (verb == "tool") {
         static const QHash<QString, Tool> tools = {{"select", Tool::Select}, {"chain", Tool::Chain}, {"arrow", Tool::Arrow},
-                                                   {"bent", Tool::BentArrow}, {"text", Tool::Text}};
+                                                   {"bent", Tool::BentArrow}, {"text", Tool::Text},
+                                                   {"mechanism", Tool::Mechanism}};
         if (tools.contains(arg)) setTool(tools[arg]);
         return;
     }
     if (verb == "mapmode") {
         setMapMode(!mapMode_);
+        return;
+    }
+    if (verb == "rotate") {
+        startRotate();
+        return;
+    }
+    if (verb == "curved") {
+        // First press: where the electrons come from (an atom, its lone pair, or a bond). Second: where they go.
+        if (curvedPending_) { finishCurved(h, cursor); return; }
+        if (h.kind != Hit::AtomHit && h.kind != Hit::BondHit) {
+            emit status("Hover over the atom, lone pair or bond the electrons come from, then press M.");
+            return;
+        }
+        curvedFrom_ = endFor(h, cursor);
+        curvedHalf_ = arg == "half";
+        curvedPending_ = true;
+        emit status(QString("%1 arrow: hover where the electrons go and press M again (on empty canvas for a free end) · Esc cancels")
+                        .arg(curvedHalf_ ? "Fishhook" : "Mechanism"));
+        update();
         return;
     }
     if (verb == "cycle") {
@@ -991,6 +1289,10 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
     }
     if (verb == "delete") {
         if (h.kind == Hit::None) { deleteSelection(); return; }
+        if (h.kind == Hit::PlusHit) {
+            removePlus(id);
+            return;
+        }
         if (h.kind == Hit::NumberHit) {
             edit("Remove number", [&](Document& d) {
                 if (Molecule* m = d.molecule(id)) { m->number.clear(); m->numberManual = true; m->caption.clear(); }
@@ -1053,6 +1355,16 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
             edit("Add " + arg, [&](Document& d) { edits::attachGroup(d, id, arg, toward); });
         }
         else if (verb == "number") editCompound(h.molId);
+        else if (verb == "lonepairs") {
+            const int cap = analyses_.value(h.molId).lonePairs.value(id, 0);
+            const Atom* a = doc_.moleculeOfAtom(id) ? doc_.moleculeOfAtom(id)->atom(id) : nullptr;
+            if (cap <= 0) {
+                emit status(QString("%1 has no lone pairs here: all its outer electrons are in bonds.")
+                                .arg(a ? (a->label.isEmpty() ? a->el : a->label) : QString("This atom")));
+                return;
+            }
+            edit("Lone pairs", [&](Document& d) { edits::cycleLonePairs(d, id, cap); });
+        }
         return;
     case Hit::BondHit:
         if (verb == "order") edit("Bond order", [&](Document& d) { edits::setBondOrder(d, id, arg.toInt()); });
@@ -1070,6 +1382,28 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
         return;
     case Hit::TextHit:
         if (verb == "edit") editText(id);
+        return;
+    case Hit::CurvedHit:
+        if (verb == "head") edit("Mechanism arrow head", [&](Document& d) { if (auto* c = d.curvedArrow(id)) c->half = !c->half; });
+        else if (verb == "flip") {
+            const CurvedArrow* c = doc_.curvedArrow(id);
+            if (!c) return;
+            if (c->shaped) {
+                // A hand-set shape mirrors across the line between its ends.
+                edit("Flip mechanism arrow", [&](Document& d) {
+                    CurvedArrow* x = d.curvedArrow(id);
+                    QPointF a, b;
+                    if (!x || !d.resolve(x->from, &a) || !d.resolve(x->to, &b)) return;
+                    const QPointF w = unit((b + x->toOff) - (a + x->fromOff));
+                    auto mirror = [&](QPointF v) { return w * (2 * dot(v, w)) - v; };
+                    x->c1 = mirror(x->c1);
+                    x->c2 = mirror(x->c2);
+                });
+                return;
+            }
+            const double b = renderer_.curvedGeom(*c, doc_, overlay_).bulge;
+            edit("Flip mechanism arrow", [&](Document& d) { if (auto* x = d.curvedArrow(id)) { x->bulge = -b; x->manual = true; } });
+        }
         return;
     case Hit::NumberHit:
         if (verb == "edit") editCompound(id);
@@ -1412,6 +1746,7 @@ void Canvas::selectAll() {
     for (const auto& m : doc_.molecules) selected_.insert(m.id);
     for (const auto& a : doc_.arrows) selected_.insert(a.id);
     for (const auto& t : doc_.texts) selected_.insert(t.id);
+    for (const auto& c : doc_.curved) selected_.insert(c.id);
     update();
     emit infoTargetChanged();
 }
@@ -1451,11 +1786,13 @@ void Canvas::paste() {
             for (const auto& a : src->arrows) b |= QRectF(a.tail(), a.head()).normalized().adjusted(-0.01, -0.01, 0.01, 0.01);
             for (const auto& t : src->texts) b |= QRectF(t.x, t.y, 0.01, 0.01);
             QPointF off = at - b.center();
+            QHash<QString, QString> atomIds, bondIds;
             for (auto m : src->molecules) {
                 QHash<QString, QString> ren;
                 for (auto& a : m.atoms) ren[a.id] = d.newId("a");
+                atomIds.insert(ren);
                 m.renameAtoms(ren);
-                for (auto& bd : m.bonds) bd.id = d.newId("b");
+                for (auto& bd : m.bonds) { QString nid = d.newId("b"); bondIds[bd.id] = nid; bd.id = nid; }
                 m.id = d.newId("m");
                 m.translate(off);
                 newIds.insert(m.id);
@@ -1463,6 +1800,9 @@ void Canvas::paste() {
             }
             for (auto a : src->arrows) { a.id = d.newId("r"); a.translate(off); newIds.insert(a.id); d.arrows.push_back(a); }
             for (auto t : src->texts) { t.id = d.newId("t"); t.x += off.x(); t.y += off.y(); newIds.insert(t.id); d.texts.push_back(t); }
+            QSet<QString> srcCurved;
+            for (const auto& c : src->curved) srcCurved.insert(c.id);
+            newIds.unite(edits::copyCurved(d, src->curved, atomIds, bondIds, off, srcCurved));
         });
         selected_ = newIds;
         update();
@@ -1573,6 +1913,19 @@ void Canvas::showContextMenu(QPointF screen) {
         });
         into->addAction("Bring to Front", this, [this, ids] { edit("Bring to front", [&](Document& d) { edits::restack(d, ids, true); }); });
         into->addAction("Send to Back", this, [this, ids] { edit("Send to back", [&](Document& d) { edits::restack(d, ids, false); }); });
+        if (ids.size() >= 2) {
+            auto* al = into->addMenu("Align and Distribute");
+            const QList<QPair<QString, snap::Align>> modes = {
+                {"Align Left", snap::Align::Left}, {"Align Centre", snap::Align::HCenter}, {"Align Right", snap::Align::Right},
+                {"Align Top", snap::Align::Top}, {"Align Middle", snap::Align::VCenter}, {"Align Bottom", snap::Align::Bottom},
+                {"Distribute Horizontally", snap::Align::DistributeH}, {"Distribute Vertically", snap::Align::DistributeV}};
+            for (int i = 0; i < modes.size(); ++i) {
+                if (i == 3 || i == 6) al->addSeparator();
+                const snap::Align mode = modes[i].second;
+                QAction* act = al->addAction(modes[i].first, this, [this, ids, mode] { alignIds(ids, mode); });
+                act->setEnabled(i < 6 || ids.size() >= 3);
+            }
+        }
     };
 
     auto addTransforms = [&](QMenu* into, const QSet<QString>& ids) {
@@ -1586,6 +1939,7 @@ void Canvas::showContextMenu(QPointF screen) {
                 edit(name, [&](Document& d) { edits::transformObjects(d, ids, t.a, t.b, t.c, t.d); });
             });
         }
+        into->addAction("Rotate Freely…", this, [this, ids] { startRotateOn(ids); });
     };
 
     if (!h.molId.isEmpty() && h.kind != Hit::NumberHit) {
@@ -1607,6 +1961,7 @@ void Canvas::showContextMenu(QPointF screen) {
                 });
             }
             menu.addAction("Edit Label…", this, [this, atomId] { editLabel(atomId); });
+            menu.addAction("Mechanism Arrow From Here", this, [this, h, cursor] { runAction("curved:full", h, cursor); });
             auto* am = menu.addMenu("Atom");
             const QList<QPair<QString, int>> charges = {{"Charge +1", 1}, {QString("Charge ") + QChar(0x2212) + "1", -1}, {"Neutral", 0}};
             for (const auto& entry : charges) {
@@ -1633,6 +1988,19 @@ void Canvas::showContextMenu(QPointF screen) {
                 int v = QInputDialog::getInt(this, "Map number", "Reaction atom-map number (0 = unmapped):", curMap, 0, 999, 1, &ok);
                 if (ok) edit("Map number", [&](Document& d) { edits::setMapNumber(d, atomId, v); });
             });
+            {
+                auto* lp = am->addMenu("Lone Pairs");
+                const int cap = analyses_.value(molId).lonePairs.value(atomId, 0);
+                lp->setEnabled(cap > 0);
+                if (cap <= 0) lp->setTitle("Lone Pairs (none)");
+                for (int n = 0; n <= cap; ++n) {
+                    QAction* act = lp->addAction(n == 0 ? QString("None") : QString::number(n), this, [this, atomId, n] {
+                        edit("Lone pairs", [&](Document& d) { edits::setLonePairs(d, atomId, n); });
+                    });
+                    act->setCheckable(true);
+                    act->setChecked(a->lonePairs == n);
+                }
+            }
             if (a->label.isEmpty()) {
                 am->addSeparator();
                 QAction* addH = am->addAction("Add Explicit H", this, [this, atomId] {
@@ -1660,6 +2028,13 @@ void Canvas::showContextMenu(QPointF screen) {
             bm->addAction("Wavy", this, [this, bondId] { edit("Bond stereo", [&](Document& d) { edits::setStereo(d, bondId, BondStereo::Wavy); }); });
             bm->addSeparator();
             bm->addAction("Flip", this, [this, bondId] { edit("Flip bond", [&](Document& d) { edits::flipBond(d, bondId); }); });
+            menu.addAction("Align Bond Horizontally", this, [this, bondId] {
+                edit("Align bond", [&](Document& d) { edits::alignBond(d, bondId, false); });
+            });
+            menu.addAction("Align Bond Vertically", this, [this, bondId] {
+                edit("Align bond", [&](Document& d) { edits::alignBond(d, bondId, true); });
+            });
+            menu.addAction("Mechanism Arrow From Here", this, [this, h, cursor] { runAction("curved:full", h, cursor); });
             menu.addSeparator();
         }
         addTransforms(&menu, ids);
@@ -1761,6 +2136,45 @@ void Canvas::showContextMenu(QPointF screen) {
         menu.addAction("Delete Structure", this, [this, ids] {
             edit("Delete", [&](Document& d) { for (const auto& id : ids) edits::remove(d, id); });
         });
+    } else if (h.kind == Hit::PlusHit) {
+        const QString pid = h.id;
+        menu.addAction("Remove Plus Sign", this, [this, pid] { removePlus(pid); });
+    } else if (h.kind == Hit::CurvedHit) {
+        const QString cid = h.id;
+        const CurvedArrow* c = doc_.curvedArrow(cid);
+        QAction* full = menu.addAction("Electron Pair (Full Head)", this, [this, cid] {
+            edit("Mechanism arrow head", [&](Document& d) { d.curvedArrow(cid)->half = false; });
+        });
+        full->setCheckable(true);
+        full->setChecked(!c->half);
+        QAction* half = menu.addAction("Single Electron (Fishhook)", this, [this, cid] {
+            edit("Mechanism arrow head", [&](Document& d) { d.curvedArrow(cid)->half = true; });
+        });
+        half->setCheckable(true);
+        half->setChecked(c->half);
+        menu.addSeparator();
+        menu.addAction("Curve the Other Way", this, [this, h, cursor] { runAction("flip", h, cursor); });
+        if (c->manual || c->shaped)
+            menu.addAction("Reset Shape", this, [this, cid] {
+                edit("Reset shape", [&](Document& d) {
+                    CurvedArrow* x = d.curvedArrow(cid);
+                    x->manual = false;
+                    x->shaped = false;
+                    x->fromOff = x->toOff = x->c1 = x->c2 = QPointF();
+                });
+            });
+        menu.addAction("Colour…", this, [this, cid] {
+            const CurvedArrow* x = doc_.curvedArrow(cid);
+            QColor col = QColorDialog::getColor(x->color.isEmpty() ? style_.mechanismColor() : QColor::fromString(x->color), this,
+                                                "Mechanism arrow colour");
+            if (col.isValid()) edit("Arrow colour", [&](Document& d) { d.curvedArrow(cid)->color = col.name(); });
+        });
+        if (!c->color.isEmpty())
+            menu.addAction("Default Colour", this, [this, cid] { edit("Arrow colour", [&](Document& d) { d.curvedArrow(cid)->color.clear(); }); });
+        menu.addSeparator();
+        addArrange(&menu, transformTargets(h));
+        menu.addSeparator();
+        menu.addAction("Delete Arrow", this, [this, cid] { edit("Delete", [&](Document& d) { edits::remove(d, cid); }); });
     } else if (h.kind == Hit::ArrowHit) {
         const QString arrowId = h.id;
         const Arrow* a = doc_.arrow(arrowId);
@@ -1786,6 +2200,21 @@ void Canvas::showContextMenu(QPointF screen) {
         });
         if (!a->color.isEmpty())
             menu.addAction("Default Colour", this, [this, arrowId] { edit("Arrow colour", [&](Document& d) { d.arrow(arrowId)->color.clear(); }); });
+        if (doc_.stepLetters) {
+            QAction* letter = menu.addAction("Show Step Letter", this, [this, arrowId] {
+                edit("Step letter", [&](Document& d) { d.arrow(arrowId)->hideLetter = !d.arrow(arrowId)->hideLetter; });
+            });
+            letter->setCheckable(true);
+            letter->setChecked(!a->hideLetter);
+        }
+        for (const auto& s : doc_.schemes)
+            for (const auto& st : s.steps)
+                if (st.arrow == arrowId && !st.noPlus.isEmpty())
+                    menu.addAction("Restore Plus Signs", this, [this, arrowId] {
+                        edit("Restore plus signs", [&](Document& d) {
+                            for (auto& s2 : d.schemes) for (auto& st2 : s2.steps) if (st2.arrow == arrowId) st2.noPlus.clear();
+                        });
+                    });
         menu.addAction("Swap Above / Below Text", this, [this, arrowId] {
             edit("Swap arrow text", [&](Document& d) { Arrow* x = d.arrow(arrowId); std::swap(x->above, x->below); });
         });
@@ -2265,6 +2694,8 @@ void Canvas::setTool(Tool t) {
     if (tool_ == t) return;
     tool_ = t;
     bentPts_.clear();
+    curvedPending_ = false;
+    rotateIds_.clear();
     preview_.clear();
     drag_ = Drag::None;
     if (t == Tool::Select) unsetCursor();
@@ -2469,6 +2900,237 @@ ReactionResult Canvas::applyReaction(const ReactionSpec& spec, const QString& ar
         layout::layoutSchemes(d, renderer_, ov);
     }, mergeKey);
     return res;
+}
+
+// ---------------------------------------------------------------------------
+// Mechanism arrows, snap guides, align and rotate
+
+Hit Canvas::curvedTargetAt(QPointF screen, QPointF model, QPointF* end) const {
+    const auto hits = hitTest(screen);
+    // An atom under the mouse wins over a bond (dropped beside an atom's centre, it means the atom).
+    for (Hit::Kind want : {Hit::AtomHit, Hit::BondHit})
+        for (const auto& x : hits) {
+            if (x.kind != want) continue;
+            if (drag_ == Drag::DrawCurved && x.id == pressHit_.id) continue;  // not back onto where it starts
+            QPointF p;
+            if (doc_.resolve(endFor(x, model), &p)) {
+                if (end) *end = p;
+                return x;
+            }
+        }
+    // Nothing right under the mouse: the nearest atom or bond close by (within most of a bond length).
+    Hit near;
+    double best = 0.8;
+    for (const auto& m : doc_.molecules) {
+        for (const auto& a : m.atoms) {
+            const double dd = len(a.pos() - model);
+            if (dd < best && !(drag_ == Drag::DrawCurved && a.id == pressHit_.id)) { best = dd; near = {Hit::AtomHit, a.id, m.id, dd}; }
+        }
+        for (const auto& b : m.bonds) {
+            const double dd = distToSegment(model, m.atom(b.a)->pos(), m.atom(b.b)->pos()) + 0.15;  // atoms win at bond ends
+            if (dd < best && !(drag_ == Drag::DrawCurved && b.id == pressHit_.id)) { best = dd; near = {Hit::BondHit, b.id, m.id, dd}; }
+        }
+    }
+    if (near.kind != Hit::None) {
+        QPointF p;
+        if (doc_.resolve(endFor(near, model), &p)) {
+            if (end) *end = p;
+            return near;
+        }
+    }
+    if (end) *end = model;
+    return {};
+}
+
+CurvedEnd Canvas::endFor(const Hit& h, QPointF model) const {
+    CurvedEnd e;
+    if (h.kind == Hit::AtomHit) {
+        e.atom = h.id;
+        if (const Molecule* m = doc_.moleculeOfAtom(h.id)) {
+            const Atom* a = m->atom(h.id);
+            // From an atom that shows lone pairs, the arrow starts at the one facing where it goes.
+            e.lonePair = a->lonePairs > 0;
+        }
+    } else if (h.kind == Hit::BondHit) {
+        e.bond = h.id;
+    } else {
+        e.x = model.x();
+        e.y = model.y();
+    }
+    return e;
+}
+
+void Canvas::finishCurved(const Hit& h, QPointF model) {
+    curvedPending_ = false;
+    const CurvedEnd to = endFor(h, model);
+    const CurvedEnd from = curvedFrom_;
+    const bool half = curvedHalf_;
+    if (!doc_.resolve(from, nullptr)) { update(); return; }
+    if (to.attached() && to.atom == from.atom && to.bond == from.bond) {
+        emit status("A mechanism arrow needs to go somewhere else: hover a different atom or bond.");
+        update();
+        return;
+    }
+    QString id;
+    edit(half ? "Add fishhook arrow" : "Add mechanism arrow", [&](Document& d) { id = edits::addCurved(d, from, to, half); });
+    if (!id.isEmpty()) emit status("Mechanism arrow added — drag it to reshape, drag an end to re-attach.");
+    update();
+}
+
+void Canvas::removePlus(const QString& plusId) {
+    // "plus:<arrow>:<structure it follows>"
+    const QString arrow = plusId.section(':', 1, 1), after = plusId.section(':', 2);
+    edit("Remove plus sign", [&](Document& d) {
+        for (auto& s : d.schemes)
+            for (auto& st : s.steps)
+                if (st.arrow == arrow && !st.noPlus.contains(after)) st.noPlus << after;
+    });
+    updateHover(lastMouse_);
+}
+
+void Canvas::startCurved(bool half) {
+    const QPointF cursor = mouseInside_ ? toModel(lastMouse_) : toModel(rect().center());
+    runAction(half ? "curved:half" : "curved:full", mouseInside_ ? hover() : Hit{}, cursor);
+}
+
+int Canvas::curvedHandleAt(QPointF screen, QString* id) const {
+    const double tol = 8.0;
+    double best = tol;
+    int which = -1;
+    for (const auto& c : doc_.curved) {
+        bool active = selected_.contains(c.id);
+        for (const auto& h : hits_) active |= h.kind == Hit::CurvedHit && h.id == c.id;
+        if (!active) continue;
+        const CurvedGeom g = renderer_.curvedGeom(c, doc_, overlay_);
+        if (!g.ok) continue;
+        const QPointF pts[] = {g.start, g.tip, g.c1, g.c2};
+        for (int k = 0; k < (g.isArc ? 2 : 4); ++k) {
+            const double dd = len(toScreen(pts[k]) - screen);
+            if (dd < best) { best = dd; *id = c.id; which = k; }
+        }
+    }
+    return which;
+}
+
+CurvedArrow Canvas::withShape(const CurvedArrow& c, const Document& d) const {
+    if (c.shaped) return c;
+    CurvedArrow out = c;
+    const CurvedGeom g = renderer_.curvedGeom(c, d, overlay_);
+    if (!g.ok) return out;
+    const double bl = style_.bondLength;
+    QPointF c1 = g.c1, c2 = g.c2;
+    if (g.isArc) {  // an arc: its end directions, a third of the way along
+        const double third = len(g.tip - g.start) / 3;
+        c1 = g.start + unit(g.apex - g.start) * third;
+        c2 = g.tip + unit(g.apex - g.tip) * third;
+    }
+    out.shaped = true;
+    out.fromOff = (g.start - g.anchorFrom) / bl;
+    out.toOff = (g.tip - g.anchorTo) / bl;
+    out.c1 = (c1 - g.start) / bl;
+    out.c2 = (c2 - g.tip) / bl;
+    return out;
+}
+
+QRectF Canvas::objectRect(const QString& id) const {
+    if (const Molecule* m = doc_.molecule(id)) return renderer_.moleculeRect(*m, overlay_);
+    if (const Molecule* m = doc_.moleculeOfAtom(id)) {
+        QPointF c = renderer_.toPt(m->atom(id)->pos());
+        return QRectF(c, QSizeF(0.01, 0.01));
+    }
+    if (const Molecule* m = doc_.moleculeOfBond(id)) {
+        const Bond* b = m->bond(id);
+        return QRectF(renderer_.toPt(m->atom(b->a)->pos()), renderer_.toPt(m->atom(b->b)->pos())).normalized();
+    }
+    if (const Arrow* a = doc_.arrow(id)) {
+        QRectF r;
+        for (const auto& q : renderer_.arrowGeom(*a, &doc_).path) r |= QRectF(q, QSizeF(0.01, 0.01));
+        return r;
+    }
+    for (const auto& t : doc_.texts) if (t.id == id) return renderer_.textRect(t);
+    if (const CurvedArrow* c = doc_.curvedArrow(id))
+        if (const CurvedGeom g = renderer_.curvedGeom(*c, doc_, overlay_); g.ok) return g.bounds;
+    return {};
+}
+
+QPointF Canvas::snapGuideDelta(const QSet<QString>& ids, QPointF delta) {
+    // The dragged things as one box, and every other object as a box to line up with.
+    QSet<QString> movingMols;
+    snap::Box moving;
+    for (const auto& id : ids) {
+        if (const Molecule* m = doc_.molecule(id)) movingMols.insert(m->id);
+        else if (const Molecule* m = doc_.moleculeOfAtom(id)) movingMols.insert(m->id);
+        else if (const Molecule* m = doc_.moleculeOfBond(id)) movingMols.insert(m->id);
+        moving.rect |= objectRect(id);
+    }
+    if (moving.rect.isNull() && moving.rect.width() <= 0) return {};
+    const QPointF dPt = renderer_.toPt(delta);
+    moving.rect.translate(dPt);
+    auto baseline = [&](const TextBox& t) {
+        const FontSpec f = renderer_.textFont(t);
+        return renderer_.textRect(t).top() + renderer_.capHeight(f) + f.size * 0.1;
+    };
+    for (const auto& t : doc_.texts) if (ids.contains(t.id)) moving.baselines.push_back(baseline(t) + dPt.y());
+
+    std::vector<snap::Box> others;
+    for (const auto& m : doc_.molecules)
+        if (!movingMols.contains(m.id)) others.push_back({renderer_.moleculeRect(m, overlay_), {}});
+    for (const auto& a : doc_.arrows) if (!ids.contains(a.id)) others.push_back({objectRect(a.id), {}});
+    for (const auto& t : doc_.texts) if (!ids.contains(t.id)) others.push_back({renderer_.textRect(t), {baseline(t)}});
+
+    const snap::Result r = snap::snapMove(moving, others, 6.0 / zoom_);
+    guides_ = r.guides;
+    return renderer_.toModel(r.delta);
+}
+
+void Canvas::alignSelection(snap::Align mode) { alignIds(actionTargets(), mode); }
+
+void Canvas::alignIds(const QSet<QString>& in, snap::Align mode) {
+    // Whole objects only: a selected atom stands for its structure.
+    QStringList ids;
+    for (const auto& id : in) {
+        QString obj = id;
+        if (const Molecule* m = doc_.moleculeOfAtom(id)) obj = m->id;
+        else if (const Molecule* m = doc_.moleculeOfBond(id)) obj = m->id;
+        if (doc_.curvedArrow(obj)) continue;  // they follow their structures
+        if (!ids.contains(obj) && !objectRect(obj).isNull()) ids << obj;
+    }
+    const bool distribute = mode == snap::Align::DistributeH || mode == snap::Align::DistributeV;
+    if (ids.size() < (distribute ? 3 : 2)) {
+        emit status(distribute ? "Select three or more objects to distribute." : "Select two or more objects to align.");
+        return;
+    }
+    std::vector<QRectF> rects;
+    for (const auto& id : ids) rects.push_back(objectRect(id));
+    const auto deltas = snap::alignDeltas(rects, mode);
+    edit(distribute ? "Distribute" : "Align", [&](Document& d) {
+        for (int i = 0; i < ids.size(); ++i) edits::moveObjects(d, {ids[i]}, renderer_.toModel(deltas[i]));
+    });
+}
+
+void Canvas::startRotate() { startRotateOn(actionTargets()); }
+
+void Canvas::startRotateOn(const QSet<QString>& in) {
+    QSet<QString> ids;
+    for (const auto& id : in) {
+        if (const Molecule* m = doc_.moleculeOfAtom(id)) ids.insert(m->id);
+        else if (const Molecule* m = doc_.moleculeOfBond(id)) ids.insert(m->id);
+        else if (doc_.molecule(id) || doc_.arrow(id) || doc_.text(id)) ids.insert(id);
+    }
+    if (ids.isEmpty()) { emit status("Hover over or select a structure first, then press Shift+R to rotate it."); return; }
+    rotateIds_ = ids;
+    emit status("Drag the round handle to rotate (15° steps; Alt: freely) · Esc or a click elsewhere: done");
+    update();
+}
+
+QPointF Canvas::rotateHandle() const {
+    QRectF b;
+    for (const auto& id : rotateIds_) b |= objectRect(id);
+    // Above the objects; while turning, it goes round the centre with the mouse.
+    const QPointF c = drag_ == Drag::Rotate ? renderer_.toPt(rotateCenter_) : b.center();
+    const double reach = (drag_ == Drag::Rotate ? rotateReach_ : b.height() / 2) + 18 / zoom_;
+    const double ang = (drag_ == Drag::Rotate ? rotateStart_ + rotateShown_ : -M_PI / 2);
+    return renderer_.toModel(c + QPointF(std::cos(ang), std::sin(ang)) * reach);
 }
 
 void Canvas::silence(const Warning& w, const QString& scope) {

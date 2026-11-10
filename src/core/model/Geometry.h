@@ -36,6 +36,12 @@ QPointF newBondDirection(const Molecule& m, const QString& atomId, int order = 1
 // Direction pointing into the largest free angular gap around an atom.
 QPointF freeDirection(const Molecule& m, const QString& atomId);
 
+// Unit directions for `n` lone pairs drawn around an atom: spread through the widest gaps between
+// its bonds and any other directions already `taken` (such as the side a label writes its H on);
+// up, down, left, right on a lone atom.
+std::vector<QPointF> lonePairDirections(const Molecule& m, const QString& atomId, int n,
+                                        const std::vector<QPointF>& taken = {});
+
 // The angle step for bonds and chains drawn with the mouse (Preferences → Drawing): 30° or 15°.
 double defaultSnapStep();
 void setDefaultSnapStep(double rad);
