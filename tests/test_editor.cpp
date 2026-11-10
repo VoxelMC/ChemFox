@@ -4,12 +4,17 @@
 #include "editor/Keymap.h"
 #include "core/model/Geometry.h"
 #include "app/Shortcuts.h"
+#include "app/Preferences.h"
+#include "style/Style.h"
 #include "core/chem/Chem.h"
 #include "core/commands/Edits.h"
 #include "editor/Canvas.h"
 
 #include <QAction>
 #include <QFile>
+#include <QDir>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QTabWidget>
@@ -601,6 +606,50 @@ TEST_CASE("E expands and collapses labels; focus moves with arrow keys and start
     d.move({20, 20});
     d.key(Qt::Key_1, "1");
     CHECK(d.mol().neighbors(c0).size() == 2);
+}
+TEST_CASE("preferences: importing styles and the default style") {
+    testApp();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    const QString src = tmp.filePath("labnotebook.style");
+    {
+        QFile f(src);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("style \"Lab notebook\"\n  bond length: 20 pt\n");
+    }
+    QString err;
+    QString name = prefs::importStyle(src, false, &err);
+    CHECK(name == "Lab notebook");
+    const QString dest = QDir(styles::userStyleDir()).filePath("Lab notebook.style");  // saved under its declared name
+    CHECK(QFile::exists(dest));
+    CHECK(styles::availableNames().contains("Lab notebook"));
+    // Importing it again asks first (reported as "exists"); replacing works when allowed.
+    CHECK(prefs::importStyle(src, false, &err).isEmpty());
+    CHECK(err == "exists");
+    CHECK(prefs::importStyle(src, true, &err) == "Lab notebook");
+    // Not a style at all.
+    const QString junk = tmp.filePath("junk.style");
+    { QFile f(junk); REQUIRE(f.open(QIODevice::WriteOnly)); f.write("hello"); }
+    CHECK(prefs::importStyle(junk, false, &err).isEmpty());
+    CHECK_FALSE(err.isEmpty());
+    // The default style falls back to "default" if the chosen one has gone.
+    QSettings().setValue(prefs::kDefaultStyle, "Lab notebook");
+    CHECK(prefs::defaultStyle() == "Lab notebook");
+    QFile::remove(dest);
+    CHECK(prefs::defaultStyle() == "default");
+    QSettings().remove(prefs::kDefaultStyle);
+
+    // The dialog builds; with CHEMFOX_SNAPSHOT set, save a picture of each tab.
+    PreferencesDialog dlg({});
+    dlg.show();
+    auto* tabs = dlg.findChild<QTabWidget*>();
+    REQUIRE(tabs);
+    CHECK(tabs->count() == 5);
+    const QString snap = qEnvironmentVariable("CHEMFOX_SNAPSHOT");
+    for (int i = 0; !snap.isEmpty() && i < tabs->count(); ++i) {
+        tabs->setCurrentIndex(i);
+        dlg.grab().save(QDir(snap).filePath(QString("prefs-%1.png").arg(i)));
+    }
 }
 TEST_CASE("keymap: keys for an action, shortest first, follow rebinding") {
     Keymap k;

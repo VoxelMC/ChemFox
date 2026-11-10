@@ -104,6 +104,9 @@ public:
     // auto-mapping steps that have no mapping yet. Toggles: on unless all are already on.
     void toggleBondChanges(QStringList arrowIds = {});
     bool showsBondChanges(const QString& arrowId) const;
+    // Preferences: new bonds/rings/groups lean toward the mouse; the scroll wheel pans (Ctrl+wheel zooms).
+    void setSteerToMouse(bool on) { steerToMouse_ = on; }
+    void setWheelPans(bool on) { wheelPans_ = on; }
     // The focused atom (orange), if any: keys act on it until Escape or a click.
     QString focusedAtom() const { return stickyAtom_; }
     // Move the focused atom to its bonded neighbour in direction `dir` (screen axes, y down).
@@ -202,7 +205,9 @@ private:
     // Building a chain from the keyboard: keys act on the newest atom (marked orange) wherever the
     // mouse is, until Escape or a click; the mouse steers each new bond.
     QString stickyAtom_;
-    int groupsGen_ = -1;  // labels::groupsGeneration() the chemistry caches were built with
+    int groupsGen_ = -1;
+    bool steerToMouse_ = true;
+    bool wheelPans_ = false;  // labels::groupsGeneration() the chemistry caches were built with
     QPointF lastMouse_;
     bool mouseInside_ = false;
     std::vector<Hit> hits_;

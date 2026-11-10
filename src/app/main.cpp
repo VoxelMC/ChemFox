@@ -141,5 +141,6 @@ int main(int argc, char** argv) {
     app.openFile = [&w](const QString& path) { w.openPath(path); };
     for (const auto& path : app.pending) w.openPath(path);
     if (!cli.positionalArguments().isEmpty()) w.openPath(cli.positionalArguments().first());
+    else if (app.pending.isEmpty()) w.reopenLastFile();  // only if Preferences asks for it
     return app.exec();
 }

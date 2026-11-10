@@ -770,6 +770,12 @@ void Canvas::wheelEvent(QWheelEvent* e) {
         update();
         return;
     }
+    // With "scroll wheel pans" on (trackpads), plain scrolling pans both ways and Ctrl+scroll zooms.
+    if (wheelPans_ && !(e->modifiers() & Qt::ControlModifier)) {
+        pan_ += QPointF(e->angleDelta().x(), e->angleDelta().y()) * 0.5;
+        update();
+        return;
+    }
     zoomBy(std::pow(1.0015, e->angleDelta().y()), e->position());
 }
 
@@ -970,7 +976,7 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
             // left where the chain started doesn't curl the chain back).
             std::optional<QPointF> toward;
             const Molecule* m = doc_.moleculeOfAtom(id);
-            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            if (m && steerToMouse_ && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
             QString newAtom;
             edit("Add bond", [&](Document& d) { newAtom = edits::growBond(d, id, arg.toInt(), toward); });
             if (!newAtom.isEmpty() && newAtom != id) {
@@ -983,7 +989,7 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
             // Like a new bond, a ring hung off a chain leans toward the mouse.
             std::optional<QPointF> toward;
             const Molecule* m = doc_.moleculeOfAtom(id);
-            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            if (m && steerToMouse_ && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
             bool benz = verb == "benzene";
             edit(benz ? "Add benzene" : "Add ring",
                  [&](Document& d) { edits::attachRing(d, id, benz ? 6 : arg.toInt(), benz, toward); });
@@ -1007,7 +1013,7 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
         else if (verb == "group") {
             std::optional<QPointF> toward;
             const Molecule* m = doc_.moleculeOfAtom(id);
-            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            if (m && steerToMouse_ && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
             edit("Add " + arg, [&](Document& d) { edits::attachGroup(d, id, arg, toward); });
         }
         else if (verb == "number") editCompound(h.molId);
