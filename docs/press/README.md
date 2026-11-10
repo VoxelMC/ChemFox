@@ -9,6 +9,10 @@ stretch, recolour outside the palette, rotate, add effects or redraw the logo.
 |---|---|---|
 | `icon/` | The app icon: the fox on a rounded tile | Store listings, articles, slides, social posts |
 | `mark/` | The fox on its own, transparent background (the nose is cut out) | On photos or coloured backgrounds, small spaces |
+| `banner/` | The fox beside the "chemfox" wordmark on dark, 1200×630 and 2400×1260 | Link previews, headers, social posts |
+
+The wordmark is set in [Rubik](https://fonts.google.com/specimen/Rubik) Medium (500): "chem" in ChemFox
+orange, "fox" in white (or the text colour on light backgrounds).
 
 Every logo comes as **SVG** (vector, any size) and **PNG** (1024, 512 and 256 px).
 
