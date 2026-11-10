@@ -48,6 +48,11 @@ struct AtomLabel {
     QRectF clip;     // bonds stop at this box (anchor + margin)
     QRectF bounds;
     QColor color;
+    // A group label (OMe, NHBoc) colours only its anchor element; the rest uses `restColor`.
+    // anchorLeft/anchorRight bound the anchor element horizontally, in points.
+    bool splitColor = false;
+    double anchorLeft = 0, anchorRight = 0;
+    QColor restColor;
 };
 
 struct ArrowGeom {

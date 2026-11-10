@@ -20,6 +20,7 @@ struct Atom {
     int radical = 0;   // number of unpaired electrons
     QString label;     // abbreviation such as OMe or CO2Et; empty = plain element
     int map = 0;       // reaction atom-map number; 0 = unmapped
+    int isotope = 0;   // mass number shown before the element (13 for 13C, 2 for D); 0 = natural
     QPointF pos() const { return {x, y}; }
     void setPos(QPointF p) { x = p.x(); y = p.y(); }
 };
@@ -52,6 +53,7 @@ struct Molecule {
     QString caption;          // e.g. yield "85%", shown under the number
     bool showStereo = false;  // draw CIP labels: (R)/(S) at stereocentres, (E)/(Z) at double bonds
     bool showCarbons = false; // label every carbon with its hydrogens (CH3, CH2, ...)
+    QString aromatic;         // aromatic rings: "" = as the style says, "kekule", "circles"
     std::vector<Atom> atoms;
     std::vector<Bond> bonds;
 
@@ -106,6 +108,7 @@ struct TextBox {
     QString text;   // markup allowed: **bold**, *italic*
     double size = 0;  // points; 0 = the style's text size
     QString color;    // empty = the style's text colour
+    QString align;    // lines aligned "" (left), "center" or "right"
 };
 
 struct Step {

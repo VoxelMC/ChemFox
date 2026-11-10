@@ -123,6 +123,17 @@ public:
     // onto empty canvas to unmap it. Map numbers and partners are shown while it is on.
     bool mapMode() const { return mapMode_; }
     void setShowPageGuide(bool on) { showPageGuide_ = on; update(); }
+    bool showsPageGuide() const { return showPageGuide_; }
+    // A dot grid (screen only, never exported); with snapping on, dragged objects land on it.
+    // `size` is the grid spacing in bond lengths.
+    void setGrid(bool show, bool snap, double size);
+    bool showsGrid() const { return showGrid_; }
+    bool snapsToGrid() const { return snapGrid_; }
+    double gridSize() const { return gridSize_; }
+    // Copies of the selection (or the hovered object), offset a little and selected.
+    void duplicateSelection();
+    // Draw the selection (or the hovered object) above / below the others of its kind.
+    void restackSelection(bool toFront);
     void setMapMode(bool on);
 
     // Reaction builder: create (empty arrowId) or replace the step drawn with that arrow.
@@ -140,6 +151,8 @@ signals:
     void mapModeChanged(bool on);
     void toolChanged(int tool);
     void addToReaction(const QString& smiles, int role);  // 0 reactant, 1 reagent, 2 product
+    void editReaction(const QString& arrowId);             // open this arrow's step in the Reaction Builder
+    void gridChanged();                                     // grid shown or snapping toggled from the canvas
     void status(const QString& text);
 
 protected:
@@ -227,6 +240,12 @@ private:
     bool spaceDown_ = false;
     bool mapMode_ = false;
     bool showPageGuide_ = false;
+    bool showGrid_ = false;
+    bool snapGrid_ = false;
+    double gridSize_ = 0.5;
+    QPointF moveRef_;  // the point of a dragged object that snaps to the grid (model units)
+    QPointF snapToGrid(QPointF model) const;
+    QSet<QString> actionTargets() const;  // hovered object (with the selection, if part of it), else the selection
     int dragIndex_ = 0;  // corner or segment of the arrow being reshaped
     void finishMapLink(QPointF screen);
     Tool tool_ = Tool::Select;

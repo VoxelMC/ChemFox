@@ -19,7 +19,7 @@ Keymap::Map Keymap::defaults() {
     atom["L"] = "element:Cl";
     atom["B"] = "element:Br";
     atom["I"] = "element:I";
-    atom["Enter"] = "label";
+    atom["X"] = "label";
     atom["+"] = "charge:+1";
     atom["="] = "charge:+1";
     atom["-"] = "charge:-1";

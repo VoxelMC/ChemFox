@@ -45,6 +45,18 @@ void setElement(Document& d, const QString& atomId, const QString& el);
 void setLabel(Document& d, const QString& atomId, const QString& text);
 void changeCharge(Document& d, const QString& atomId, int delta);
 void toggleRadical(Document& d, const QString& atomId);
+void setCharge(Document& d, const QString& atomId, int charge);
+// Mass number (13 for 13C); 0 = natural abundance.
+void setIsotope(Document& d, const QString& atomId, int massNumber);
+void setMapNumber(Document& d, const QString& atomId, int map);
+// Draw one implicit hydrogen as an explicit H atom (one bond away). Returns the new atom, or empty.
+QString addExplicitH(Document& d, QString atomId);
+// Remove explicit H atoms bonded to an atom (they become implicit again). Returns how many.
+int removeExplicitH(Document& d, const QString& atomId);
+// Replace a set of atoms in one structure with a single label atom ("Boc", "R1"). The label sits on the
+// atom that bonds to the rest of the structure; a set with more than one such bond is refused.
+// Returns the label atom, or empty with *error set.
+QString groupAsLabel(Document& d, const QSet<QString>& atomIds, const QString& label, QString* error = nullptr);
 void setBondOrder(Document& d, const QString& bondId, int order);
 // Set wedge/hash/wavy; applying the same stereo again flips its direction.
 void setStereo(Document& d, const QString& bondId, BondStereo s);
@@ -55,6 +67,11 @@ void flipBond(Document& d, const QString& bondId);
 void remove(Document& d, const QString& id);
 void moveObjects(Document& d, const QSet<QString>& ids, QPointF delta);
 void cycleArrowKind(Document& d, const QString& arrowId);
+// Copies of molecules, arrows and texts in `ids`, moved by `offset`, with fresh ids (numbers and captions
+// are not copied). Returns the new ids.
+QSet<QString> duplicate(Document& d, const QSet<QString>& ids, QPointF offset);
+// Draw these objects on top of (toFront) or underneath the others of their kind.
+void restack(Document& d, const QSet<QString>& ids, bool toFront);
 // Apply a linear map (flip, rotation) to molecules, arrows and texts in `ids`, about their
 // common centre. Mirror images swap wedges and hashes so the chemistry stays the same.
 void transformObjects(Document& d, const QSet<QString>& ids, double m11, double m12, double m21, double m22);

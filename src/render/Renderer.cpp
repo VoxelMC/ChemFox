@@ -121,7 +121,7 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
     const QStringList nbs = m.neighbors(a.id);
     const int deg = nbs.size();
     const bool plain = a.label.isEmpty();
-    if (plain && a.el == "C" && deg > 0 && !m.showCarbons) return L;  // implicit carbon
+    if (plain && a.el == "C" && deg > 0 && !m.showCarbons && a.isotope == 0) return L;  // implicit carbon
     L.visible = true;
 
     const FontSpec f = labelFont();
@@ -146,11 +146,17 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
         if (h > 1) hRuns.push_back({QString::number(h), Script::Sub});
         bool hFirst = deg == 0 ? QStringList{"O", "S", "Se", "F", "Cl", "Br", "I"}.contains(a.el) : flip;
         bool hVertical = deg >= 2 && std::abs(freeDir.y()) > 0.8;
+        // An isotope's mass number sits just before the element, as a superscript (13C, 2H).
+        std::vector<TextRun> iso;
+        if (a.isotope > 0) iso = {{QString::number(a.isotope), Script::Super}};
         if (!hRuns.empty() && !hVertical && hFirst) {
             prefix = hRuns;
-            main = hRuns;
+            prefix.insert(prefix.end(), iso.begin(), iso.end());
+            main = prefix;
             main.push_back({a.el});
         } else {
+            prefix = iso;
+            main = iso;
             main.push_back({a.el});
             if (!hVertical) main.insert(main.end(), hRuns.begin(), hRuns.end());
         }
@@ -168,17 +174,32 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
         main = labels::labelRuns(text);
         if (flip) prefix = labels::labelRuns(text.left(text.size() - anchorTok.size()));
     }
-    if (a.charge != 0) {
-        QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
-                    (a.charge > 0 ? "+" : QString(QChar(0x2212)));
-        main.push_back({q, Script::Super});
-    }
-
     // Position: centre the anchor element on the atom.
     double prefixW = runsWidth(prefix, f);
     double anchorW = runsWidth({{anchorText}}, f);
     QPointF origin(c.x() - prefixW - anchorW / 2, c.y() + cap / 2);
     L.blocks.insert(L.blocks.begin(), {main, origin});
+
+    if (a.charge != 0) {
+        // The charge goes top-right of the label, unless a bond leaves that way: then the first free corner
+        // of top-left, bottom-right, bottom-left (it used to sit on top of such a bond).
+        const QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
+                          (a.charge > 0 ? "+" : QString(QChar(0x2212)));
+        const std::vector<TextRun> qRuns{{q, Script::Super}};
+        const double qw = runsWidth(qRuns, f);
+        const double left = origin.x(), right = origin.x() + runsWidth(main, f);
+        const double top = origin.y() - cap * 0.85, low = origin.y() + cap * 0.15;  // centre heights of the charge
+        const QPointF corners[] = {{right + qw / 2, top}, {left - qw / 2, top}, {right + qw / 2, low}, {left - qw / 2, low}};
+        QPointF centre = corners[0];
+        for (const QPointF& k : corners) {
+            const QPointF dir = unit(k - c);
+            bool clear = true;
+            for (const auto& nb : nbs) clear &= dot(unit(toPt(m.atom(nb)->pos()) - c), dir) < std::cos(M_PI * 40 / 180);
+            if (clear) { centre = k; break; }
+        }
+        // A superscript's centre sits about (qw/2, 0.85 cap) up and right of its block origin.
+        L.blocks.push_back({qRuns, centre - QPointF(qw / 2, -cap * 0.85)});
+    }
 
     const double mg = s_.margin;
     L.clip = QRectF(origin.x() + prefixW - mg, c.y() - cap / 2 - mg, anchorW + 2 * mg, cap + 2 * mg);
@@ -189,6 +210,13 @@ AtomLabel Renderer::atomLabel(const Molecule& m, const Atom& a, const ChemOverla
     }
     L.bounds = bounds;
     L.color = plain ? elementColor(a.el) : elementColor(anchorText);
+    if (!plain && L.color != s_.textColor) {
+        // Only the anchor element (the O of OMe) takes the element colour; Me stays in the text colour.
+        L.splitColor = true;
+        L.anchorLeft = origin.x() + prefixW;
+        L.anchorRight = L.anchorLeft + anchorW;
+        L.restColor = s_.textColor;
+    }
     return L;
 }
 
@@ -326,7 +354,8 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
     // Aromatic circles replace alternating double bonds when the style asks for them.
     QSet<QString> circleBonds;
     std::vector<QStringList> circles;
-    if (s_.aromaticCircles) {
+    const bool useCircles = m.aromatic.isEmpty() ? s_.aromaticCircles : m.aromatic == "circles";
+    if (useCircles) {
         for (const auto& ring : ov.aromaticRings.value(m.id)) {
             circles.push_back(ring);
             for (int i = 0; i < ring.size(); ++i)
@@ -454,7 +483,25 @@ void Renderer::drawMolecule(QPainter& p, const Molecule& m, const ChemOverlay& o
     for (const auto& a : m.atoms) {
         const AtomLabel& L = labelMap[a.id];
         if (L.visible) {
-            for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+            if (!L.splitColor) {
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+            } else {
+                // Draw the label twice, clipped: the anchor element's column in its colour, the rest plain.
+                const QRectF all = L.bounds.adjusted(-f.size, -f.size, f.size, f.size);
+                const QRectF anchor(L.anchorLeft, all.top(), L.anchorRight - L.anchorLeft, all.height());
+                p.save();
+                p.setClipRect(anchor, Qt::IntersectClip);
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.color);
+                p.restore();
+                p.save();
+                QPainterPath restPath;
+                restPath.addRect(all);
+                QPainterPath anchorPath;
+                anchorPath.addRect(anchor);
+                p.setClipPath(restPath.subtracted(anchorPath), Qt::IntersectClip);
+                for (const auto& blk : L.blocks) drawRuns(p, blk.runs, blk.origin, f, L.restColor);
+                p.restore();
+            }
         } else if (a.charge != 0) {
             QPointF fd = freeDirection(m, a.id);
             QString q = (std::abs(a.charge) > 1 ? QString::number(std::abs(a.charge)) : QString()) +
@@ -813,7 +860,13 @@ void Renderer::draw(QPainter& p, const Document& d, const ChemOverlay& ov, const
         if (deco && deco->editingId == t.id) continue;
         double y = r.top() + capHeight(f) + f.size * 0.1;
         for (const auto& l : t.text.split('\n')) {
-            drawRuns(p, labels::markupRuns(l), QPointF(r.left(), y), f, tc);
+            const auto runs = labels::markupRuns(l);
+            double x = r.left();
+            if (!t.align.isEmpty()) {
+                double spare = r.width() - runsWidth(runs, f);
+                x += t.align == "right" ? spare : t.align == "center" ? spare / 2 : 0;
+            }
+            drawRuns(p, runs, QPointF(x, y), f, tc);
             y += f.size * 1.25;
         }
     }

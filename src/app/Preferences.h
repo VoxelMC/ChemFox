@@ -1,10 +1,11 @@
 #pragma once
 // Edit → Preferences (ChemFox → Settings… on macOS): app-wide choices, kept in QSettings and applied at once.
 //
-//   General  default style for new documents, reopen the last file, automatic update checks
-//   Styles   your saved styles: import, export, delete, open the folder
-//   Drawing  new bonds lean toward the mouse; scroll wheel zooms or pans
-//   Export   PNG resolution, whether to ask each time, transparent background
+//   General  default style for new documents, tool at startup, documents folder, reopen the last file,
+//            autosave for crash recovery, automatic update checks
+//   Styles   your saved styles: preview, import, export, rename, delete, set as default, open the folder
+//   Drawing  bonds lean toward the mouse; bond angle steps; scroll wheel; page width guide; grid
+//   Export   default format (Ctrl+E), PNG resolution, whether to ask each time, transparent background
 //   Keys     opens Keyboard Shortcuts (keys and custom groups)
 
 #include <QDialog>
@@ -13,6 +14,7 @@
 
 class QCheckBox;
 class QComboBox;
+class QLabel;
 class QListWidget;
 class QSpinBox;
 
@@ -29,8 +31,21 @@ inline const char* kWheelPans = "prefs/wheelPans";         // bool, false (Ctrl+
 inline const char* kPngDpi = "pngDpi";                     // int, 300
 inline const char* kPngAsk = "prefs/pngAsk";               // bool, true
 inline const char* kPngTransparent = "prefs/pngTransparent"; // bool, false
+inline const char* kStartTool = "prefs/startTool";         // QString: select, chain, arrow, bent, text
+inline const char* kDocFolder = "prefs/documentFolder";    // QString; empty = the last folder used
+inline const char* kAutosave = "prefs/autosave";           // bool, true: keep a recovery copy of unsaved work
+inline const char* kAutosaveMinutes = "prefs/autosaveMinutes"; // int, 2
+inline const char* kBondStep = "prefs/bondStep";           // int degrees, 30 (or 15)
+inline const char* kPageGuide = "prefs/pageGuide";         // bool, false
+inline const char* kShowGrid = "prefs/showGrid";           // bool, false
+inline const char* kSnapGrid = "prefs/snapGrid";           // bool, false
+inline const char* kGridSize = "prefs/gridSize";           // double, bond lengths, 0.5
+inline const char* kExportFormat = "prefs/exportFormat";   // QString: svg, pdf, png, emf; default svg
 
 QString defaultStyle();
+QString exportFormat();  // a format this build can write
+// Where Open and Save As start: the documents folder if one is set, else the last folder used.
+QString startFolder();
 // Copy a .style file into the user style folder. Returns the style's name, or empty with *error set.
 // An existing file of the same name is only replaced when overwrite is true.
 QString importStyle(const QString& file, bool overwrite, QString* error);
@@ -53,10 +68,12 @@ private:
     QWidget* exportTab();
     QWidget* keysTab();
     void fillStyles();
+    void showPreview();
 
     std::function<void()> openShortcuts_;
     QComboBox* defaultStyle_ = nullptr;
     QListWidget* userStyles_ = nullptr;
+    QLabel* preview_ = nullptr;
 };
 
 }  // namespace cd

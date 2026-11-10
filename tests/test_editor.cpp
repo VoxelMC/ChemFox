@@ -20,6 +20,7 @@
 #include <QTabWidget>
 #include <QLineEdit>
 #include <QMouseEvent>
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 using namespace cd;
@@ -121,11 +122,18 @@ TEST_CASE("hover and type builds and edits structures") {
     d.key(Qt::Key_AsciiCircum, "^", Qt::ShiftModifier);
     CHECK(d.mol().atoms.size() == 11);
 
-    // Enter on an atom opens the label editor.
+    // Double-clicking an atom doesn't open the label editor; X does.
     Atom tip;
     for (auto& a : d.mol().atoms) if (d.mol().neighbors(a.id).size() == 1) tip = a;
     d.move(d.atomPos(tip));
-    d.key(Qt::Key_Return, "\r");
+    {
+        QMouseEvent dbl(QEvent::MouseButtonDblClick, d.atomPos(tip), d.c.mapToGlobal(d.atomPos(tip)), Qt::LeftButton,
+                        Qt::LeftButton, Qt::NoModifier);
+        QApplication::sendEvent(&d.c, &dbl);
+        auto* open = d.c.findChild<QLineEdit*>();
+        CHECK((open == nullptr || !open->isVisible()));
+    }
+    d.key(Qt::Key_X, "x");
     auto* le = d.c.findChild<QLineEdit*>();
     REQUIRE(le);
     le->setText("MeO2C");
@@ -660,4 +668,48 @@ TEST_CASE("keymap: keys for an action, shortest first, follow rebinding") {
     k.setMap(m);
     CHECK(k.keysFor("any", "tool:select") == QStringList{"V", "Shift+S"});
     CHECK(k.keysFor("any", "nothing").isEmpty());
+}
+TEST_CASE("grid snapping, duplicate, bond angle steps and preference helpers") {
+    testApp();
+    Driver d;
+    d.c.insertSmiles("CCCC");
+    REQUIRE(d.c.doc().molecules.size() == 1);
+
+    // With snapping on, the dragged bond's first atom lands on a grid point.
+    d.c.setGrid(true, true, 0.5);
+    const Molecule& m = d.mol();
+    const Bond b = m.bonds[1];
+    d.drag(d.bondPos(m, b), d.bondPos(m, b) + QPointF(53, 31));
+    const Atom* a = d.mol().atom(b.a);
+    auto onGrid = [](double v) { return std::abs(v / 0.5 - std::round(v / 0.5)) < 1e-6; };
+    CHECK(onGrid(a->x));
+    CHECK(onGrid(a->y));
+    d.c.setGrid(false, false, 0.5);
+
+    // Duplicate the selection: a second copy, selected.
+    d.move({5, 5});  // nothing hovered
+    d.c.selectAll();
+    d.c.duplicateSelection();
+    CHECK(d.c.doc().molecules.size() == 2);
+    CHECK(d.c.selection().size() == 1);
+    d.c.restackSelection(false);  // the copy goes underneath
+    CHECK(d.c.doc().molecules[0].id == *d.c.selection().begin());
+
+    // Bond angle steps (Preferences → Drawing).
+    geom::setDefaultSnapStep(M_PI / 12);
+    CHECK(geom::snapAngle(0.3) == Catch::Approx(M_PI / 12));
+    geom::setDefaultSnapStep(M_PI / 6);
+    CHECK(geom::snapAngle(0.3) == Catch::Approx(M_PI / 6));
+
+    // Export format falls back to SVG for anything unknown; the documents folder wins over the last folder.
+    QSettings s;
+    s.setValue(prefs::kExportFormat, "pdf");
+    CHECK(prefs::exportFormat() == "pdf");
+    s.setValue(prefs::kExportFormat, "bogus");
+    CHECK(prefs::exportFormat() == "svg");
+    s.remove(prefs::kExportFormat);
+    QTemporaryDir tmp;
+    s.setValue(prefs::kDocFolder, tmp.path());
+    CHECK(prefs::startFolder() == tmp.path());
+    s.remove(prefs::kDocFolder);
 }
