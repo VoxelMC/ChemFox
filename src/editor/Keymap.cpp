@@ -3,6 +3,7 @@
 #include "core/model/Labels.h"
 
 #include <QDir>
+#include <algorithm>
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -178,6 +179,16 @@ QString Keymap::describe(const QString& action) {
     if (verb == "tool") return QString("%1 tool").arg(arg.left(1).toUpper() + arg.mid(1));
     return action;
 }
+QStringList Keymap::keysFor(const QString& target, const QString& action) const {
+    QStringList keys;
+    const auto bound = map_.value(target);
+    for (auto it = bound.begin(); it != bound.end(); ++it) if (it.value() == action) keys << it.key();
+    std::sort(keys.begin(), keys.end(), [](const QString& a, const QString& b) {
+        return a.size() != b.size() ? a.size() < b.size() : a < b;
+    });
+    return keys;
+}
+
 QString Keymap::action(const QString& target, const QString& key) const {
     QString a = map_.value(target).value(key);
     if (a.isEmpty()) a = map_.value("any").value(key);
