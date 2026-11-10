@@ -5,6 +5,7 @@
 #include "core/model/Document.h"
 
 #include <QTimer>
+#include <functional>
 
 class QComboBox;
 class QLabel;
@@ -64,6 +65,7 @@ private:
     QMenu* reactionMenu_ = nullptr;
     QAction* mapModeAction_ = nullptr;
     QAction* autoUpdateAction_ = nullptr;
+    std::function<void()> refreshToolKeys_;  // re-labels the tools with their current hover keys
     QToolBar* toolbar_ = nullptr;
     ShortcutRegistry shortcuts_;
     bool syncingStyle_ = false;

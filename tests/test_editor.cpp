@@ -651,3 +651,13 @@ TEST_CASE("preferences: importing styles and the default style") {
         dlg.grab().save(QDir(snap).filePath(QString("prefs-%1.png").arg(i)));
     }
 }
+TEST_CASE("keymap: keys for an action, shortest first, follow rebinding") {
+    Keymap k;
+    CHECK(k.keysFor("any", "tool:select") == QStringList{"V"});
+    CHECK(k.keysFor("any", "tool:arrow") == QStringList{"Shift+A"});
+    Keymap::Map m = k.map();
+    m["any"]["Shift+S"] = "tool:select";
+    k.setMap(m);
+    CHECK(k.keysFor("any", "tool:select") == QStringList{"V", "Shift+S"});
+    CHECK(k.keysFor("any", "nothing").isEmpty());
+}
