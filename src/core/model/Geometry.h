@@ -6,6 +6,7 @@
 
 #include <QLineF>
 #include <cmath>
+#include <optional>
 
 namespace cd::geom {
 
@@ -27,7 +28,10 @@ QStringList smallestRing(const Molecule& m, const Bond& b, int maxSize = 8);
 int doubleBondSide(const Molecule& m, const Bond& b);
 
 // Unit direction for a new bond from an atom; `order` matters for linear (triple) geometry.
-QPointF newBondDirection(const Molecule& m, const QString& atomId, int order = 1);
+// With `toward` (a model point, e.g. the mouse), picks the well-formed direction nearest to it:
+// any 30° step from a lone atom, the zig or the zag from a chain end, the open side elsewhere.
+QPointF newBondDirection(const Molecule& m, const QString& atomId, int order = 1,
+                         std::optional<QPointF> toward = std::nullopt);
 
 // Direction pointing into the largest free angular gap around an atom.
 QPointF freeDirection(const Molecule& m, const QString& atomId);

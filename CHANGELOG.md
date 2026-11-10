@@ -10,6 +10,33 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-10
+
+### Added
+- Focused atom (light orange): after a key grows a bond, keys act on the newest atom wherever the mouse goes,
+  until Escape or a click. Each new bond leans toward the mouse, so you steer by pointing. Arrow keys move
+  the focus to a neighbouring atom, and clicking an atom of an already-selected structure focuses it.
+- Continue Reaction (Ctrl+arrow key; Cmd on macOS): an arrow from the selected structure in that direction
+  and a copy of it past the head, selected, ready to edit into the product. The copy is mapped atom for atom
+  and the step shows bond changes, so edits to it are coloured as you make them.
+- Show Bond Changes for any arrow: right-click it, or Reaction → Arrow (all steps if no arrow is hovered or
+  selected). Steps without a mapping are mapped automatically.
+- Custom groups: Edit → Keyboard Shortcuts → Groups. Give a name and a SMILES with * at the attachment point,
+  and optionally a hover key. Files that use them carry the definitions.
+- Shift+C adds an acetyl (Ac). Group keys turn a chain end into the group, or add it one bond away from an
+  atom with two or more bonds.
+- E on a group label expands it to its structure; E on an atom of an expanded group collapses it.
+
+### Changed
+- New logo: a solid fox head made from the benzene hexagon, with an orange nose, on a flat orange tile.
+  A press kit (SVG and PNG, icon and mark, in colour, black and white) is in `docs/press` and linked from
+  the download page.
+- The toolbar's Undo and Redo buttons keep a fixed label (what they'd undo is in the tooltip), so the
+  buttons next to them no longer shift.
+- Files open with the drawing fitted and centred, also when opened at launch.
+- A ring added to an atom that already has two bonds (three for a saturated ring, which may be spiro) hangs
+  off a new bond instead of being drawn through the atom; it leans toward the mouse like a new bond.
+
 ## [0.1.0] - 2026-11-10
 
 First test release.

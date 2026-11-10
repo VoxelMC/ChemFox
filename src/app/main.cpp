@@ -1,6 +1,7 @@
 #include "app/MainWindow.h"
 #include "core/chem/Chem.h"
 #include "core/commands/Edits.h"
+#include "editor/Groups.h"
 #include "io/Emf.h"
 #include "io/Export.h"
 #include "io/Native.h"
@@ -124,6 +125,7 @@ int main(int argc, char** argv) {
     QApplication::setApplicationVersion(CHEMFOX_VERSION);
     QApplication::setWindowIcon(QIcon(":/icons/chemfox.png"));
     migrateFromChemdoc();
+    cd::groups::load();  // custom groups, before anything reads a label
 
     QCommandLineParser cli;
     cli.addPositionalArgument("file", "Document or structure file to open");

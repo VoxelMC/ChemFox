@@ -54,5 +54,18 @@ std::vector<TextRun> hillRuns(const QString& formula);
 
 const QStringList& knownAbbreviations();
 
+// Custom groups: name -> SMILES with one '*' for the attachment point. The user's own (kept in
+// groups.json) can replace built-ins; groups read from an opened file fill in names the user
+// doesn't define, for the session only.
+QMap<QString, QString> customGroups();
+QMap<QString, QString> documentGroups();
+void setCustomGroups(const QMap<QString, QString>& groups);
+void addFileGroups(const QMap<QString, QString>& groups);
+bool isBuiltin(const QString& name);
+// Bumped whenever the group table changes, so caches of computed chemistry can be dropped.
+int groupsGeneration();
+// Why a custom group can't be used as given (empty if fine). The SMILES itself is checked by chem.
+QString checkGroup(const QString& name, const QString& smiles);
+
 }  // namespace labels
 }  // namespace cd

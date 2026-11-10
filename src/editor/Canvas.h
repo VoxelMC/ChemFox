@@ -83,6 +83,8 @@ public:
     void command(const QString& id);
     static QStringList commandIds();
     void reloadKeymap() { keymap_.load(); }
+    // Custom groups were edited: recompute formulas, warnings and labels.
+    void groupsChanged() { recompute(); update(); emit infoTargetChanged(); }
     void alignToNeighbour(const QString& molId, const QString& refId);
     void numberCompounds();
     // Inserted at `at` (model units) when given, else at the cursor or the view centre.
@@ -95,6 +97,17 @@ public:
     void paste();
     void zoomBy(double factor, QPointF anchor = {});
     void zoomToFit();
+    // Draw an arrow from the selected structure in `dir` (a unit axis) and a copy of it past the
+    // head, ready to be changed into the product.
+    void continueReaction(QPointF dir);
+    // Colour bonds broken, formed and changed for these arrows' steps (all steps if none given),
+    // auto-mapping steps that have no mapping yet. Toggles: on unless all are already on.
+    void toggleBondChanges(QStringList arrowIds = {});
+    bool showsBondChanges(const QString& arrowId) const;
+    // The focused atom (orange), if any: keys act on it until Escape or a click.
+    QString focusedAtom() const { return stickyAtom_; }
+    // Move the focused atom to its bonded neighbour in direction `dir` (screen axes, y down).
+    void moveFocus(QPointF dir);
     void resetZoom();
     void goTo(const Warning& w);
     void setStyleName(const QString& name);
@@ -136,6 +149,7 @@ protected:
     void keyPressEvent(QKeyEvent*) override;
     void keyReleaseEvent(QKeyEvent*) override;
     void leaveEvent(QEvent*) override;
+    void resizeEvent(QResizeEvent*) override;
     bool event(QEvent*) override;
     bool focusNextPrevChild(bool) override { return false; }
 
@@ -181,6 +195,14 @@ private:
 
     double zoom_ = 2.0;
     QPointF pan_{60, 60};
+    // After Zoom to Fit (which opening a document does) the view stays fitted and centred while the
+    // window settles or is resized (first layout, restored or maximised geometry), until the user
+    // pans, zooms or edits.
+    bool fitPending_ = false;
+    // Building a chain from the keyboard: keys act on the newest atom (marked orange) wherever the
+    // mouse is, until Escape or a click; the mouse steers each new bond.
+    QString stickyAtom_;
+    int groupsGen_ = -1;  // labels::groupsGeneration() the chemistry caches were built with
     QPointF lastMouse_;
     bool mouseInside_ = false;
     std::vector<Hit> hits_;

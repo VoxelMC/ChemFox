@@ -11,8 +11,9 @@ namespace cd::edits {
 // --- creation ---------------------------------------------------------------
 // Ids are taken by value: these add atoms, which can move the atom list an id refers into.
 QString addAtom(Document& d, QPointF pos, const QString& el = "C");
-// Grow a bond from an atom in the best free direction. Returns the new atom id.
-QString growBond(Document& d, QString atomId, int order);
+// Grow a bond from an atom in the best free direction (the one nearest `toward`, if given).
+// Returns the new atom id.
+QString growBond(Document& d, QString atomId, int order, std::optional<QPointF> toward = std::nullopt);
 // Bond from an atom to a point (new atom) or to an existing atom (merging molecules).
 QString bondToPoint(Document& d, QString atomId, QPointF pos, int order = 1);
 QString bondAtoms(Document& d, QString a, QString b, int order = 1);
@@ -22,12 +23,21 @@ QString addChain(Document& d, std::optional<QString> startAtom, QPointF start, Q
 // Chain geometry without editing, for previews. First point is the start.
 std::vector<QPointF> chainPoints(const Document& d, std::optional<QString> startAtom, QPointF start, QPointF end,
                                  bool snap);
-void attachRing(Document& d, QString atomId, int n, bool aromatic);
+// A ring on an atom: through a chain end, or one bond away from an atom that already has two bonds
+// (three for a saturated ring, which can be spiro). The new bond leans toward `toward` if given.
+void attachRing(Document& d, QString atomId, int n, bool aromatic, std::optional<QPointF> toward = std::nullopt);
 void fuseRing(Document& d, QString bondId, int n, bool aromatic);
+// A group label such as Ac: a lone atom or chain end becomes the group; an atom with two or more
+// bonds gets it one bond away (leaning toward `toward`). Returns the labelled atom.
+QString attachGroup(Document& d, QString atomId, const QString& name, std::optional<QPointF> toward = std::nullopt);
 void placeRing(Document& d, QPointF center, int n, bool aromatic);
 // Insert molecules (e.g. from SMILES) centred at `at`, with fresh ids. Returns new molecule ids.
 QStringList insertMolecules(Document& d, std::vector<Molecule> mols, QPointF at);
 QString addArrow(Document& d, QPointF tail, double length = 3.0);
+// Next step of a reaction: an arrow tail -> head and copies of the molecules moved by `delta`
+// (fresh ids, no number or caption), ready to be changed into the product. Each copied atom is
+// mapped to its original and the step shows bond changes. Returns the copies' ids.
+QStringList continueReaction(Document& d, const QStringList& molIds, QPointF tail, QPointF head, QPointF delta);
 QString addText(Document& d, QPointF pos, const QString& text);
 
 // --- atoms and bonds ---------------------------------------------------------

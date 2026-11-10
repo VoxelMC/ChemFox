@@ -1,5 +1,5 @@
 {
-    "format": "chemdoc",
+    "format": "chemfox",
     "objects": [
         {
             "atoms": [

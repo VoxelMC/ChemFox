@@ -116,7 +116,55 @@ QPointF freeDirection(const Molecule& m, const QString& atomId) {
     return {std::cos(bestAng), std::sin(bestAng)};
 }
 
-QPointF newBondDirection(const Molecule& m, const QString& atomId, int order) {
+namespace {
+QPointF defaultBondDirection(const Molecule& m, const QString& atomId, int order);
+}
+
+QPointF newBondDirection(const Molecule& m, const QString& atomId, int order, std::optional<QPointF> toward) {
+    QPointF def = defaultBondDirection(m, atomId, order);
+    const Atom* a = m.atom(atomId);
+    if (!a || !toward) return def;
+    QPointF want = *toward - a->pos();
+    if (len(want) < 1e-6) return def;
+    want = unit(want);
+    QStringList nbs = m.neighbors(atomId);
+    if (nbs.isEmpty()) {
+        double ang = snapAngle(std::atan2(want.y(), want.x()), M_PI / 6);
+        return {std::cos(ang), std::sin(ang)};
+    }
+    // Linear centres (triple bonds, cumulenes) have only one sensible direction.
+    if (nbs.size() == 1 && len(def + unit(m.atom(nbs[0])->pos() - a->pos())) < 1e-6) return def;
+    // A point behind the atom (back along its bonds, e.g. where the chain started) says nothing
+    // about which way to go next.
+    QPointF back;
+    for (const auto& id : nbs) back += unit(m.atom(id)->pos() - a->pos());
+    if (len(back) > 1e-6 && dot(want, unit(back)) > 0.5) return def;
+    std::vector<QPointF> cands;
+    if (nbs.size() == 1) {
+        QPointF u = unit(m.atom(nbs[0])->pos() - a->pos());
+        cands = {rotate(u, 2 * M_PI / 3), rotate(u, -2 * M_PI / 3)};
+    } else {
+        // The middle of every wide gap between existing bonds.
+        std::vector<double> angs;
+        for (const auto& id : nbs) {
+            QPointF v = m.atom(id)->pos() - a->pos();
+            angs.push_back(std::atan2(v.y(), v.x()));
+        }
+        std::sort(angs.begin(), angs.end());
+        for (size_t i = 0; i < angs.size(); ++i) {
+            double a0 = angs[i], a1 = (i + 1 < angs.size()) ? angs[i + 1] : angs[0] + 2 * M_PI;
+            if (a1 - a0 >= M_PI * 150 / 180 - 1e-6) cands.push_back({std::cos((a0 + a1) / 2), std::sin((a0 + a1) / 2)});
+        }
+    }
+    if (cands.empty()) return def;
+    std::sort(cands.begin(), cands.end(), [&](QPointF p, QPointF q) { return dot(p, want) > dot(q, want); });
+    // A near tie (the mouse straight behind or ahead) keeps the usual choice.
+    if (cands.size() > 1 && dot(cands[0], want) - dot(cands[1], want) < 0.1) return def;
+    return cands[0];
+}
+
+namespace {
+QPointF defaultBondDirection(const Molecule& m, const QString& atomId, int order) {
     const Atom* a = m.atom(atomId);
     if (!a) return {1, 0};
     QStringList nbs = m.neighbors(atomId);
@@ -150,6 +198,7 @@ QPointF newBondDirection(const Molecule& m, const QString& atomId, int order) {
     }
     return freeDirection(m, atomId);
 }
+}  // namespace
 
 double snapAngle(double rad, double step) { return std::round(rad / step) * step; }
 

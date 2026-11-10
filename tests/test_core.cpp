@@ -533,3 +533,69 @@ TEST_CASE("text distances from arrows and structures are style settings") {
     CHECK(far.arrowGeom(*d.arrow(id), &d).below[0].origin.y() > near.arrowGeom(*d.arrow(id), &d).below[0].origin.y() + 5);
     CHECK(far.numberRect(d.molecules[0], ov).top() > near.numberRect(d.molecules[0], ov).top() + 10);
 }
+
+TEST_CASE("rings on atoms: through a chain end, one bond away from a chain middle") {
+    // Propane's middle carbon: benzene hangs off a new bond (isopropylbenzene), not through the atom.
+    Document d;
+    QString a = edits::addAtom(d, {0, 0});
+    QString mid = edits::bondToPoint(d, a, {0.866, -0.5});
+    edits::bondToPoint(d, mid, {1.732, 0});
+    edits::attachRing(d, mid, 6, true);
+    CHECK(chem::info(d.molecules[0]).smiles == "CC(C)c1ccccc1");
+    // No atom of the new ring sits on top of an old one.
+    for (const auto& p : d.molecules[0].atoms)
+        for (const auto& q : d.molecules[0].atoms)
+            if (p.id != q.id) CHECK(geom::len(p.pos() - q.pos()) > 0.5);
+    // A chain end becomes a ring atom: ethane's end gives toluene.
+    Document e;
+    QString x = edits::addAtom(e, {0, 0});
+    QString y = edits::bondToPoint(e, x, {1, 0});
+    edits::attachRing(e, y, 6, true);
+    CHECK(chem::info(e.molecules[0]).smiles == "Cc1ccccc1");
+    // A saturated ring on a two-bond carbon is spiro.
+    Document s;
+    QString s0 = edits::addAtom(s, {0, 0});
+    QString s1 = edits::bondToPoint(s, s0, {0.866, -0.5});
+    edits::bondToPoint(s, s1, {1.732, 0});
+    edits::attachRing(s, s1, 6, false);
+    CHECK(s.molecules[0].atoms.size() == 8);
+}
+TEST_CASE("groups: acetyl on chain ends and middles, custom groups, carried in files") {
+    // Ac on ethane's end turns that carbon into the acetyl: acetone's skeleton CC(C)=O.
+    Document d;
+    QString a = edits::addAtom(d, {0, 0});
+    QString b = edits::bondToPoint(d, a, {1, 0});
+    edits::attachGroup(d, b, "Ac");
+    CHECK(chem::info(d.molecules[0]).smiles == "CC(C)=O");
+    // On propane's middle carbon it hangs off a new bond: 3-methylbutan-2-one.
+    Document e;
+    QString e0 = edits::addAtom(e, {0, 0});
+    QString e1 = edits::bondToPoint(e, e0, {0.866, -0.5});
+    edits::bondToPoint(e, e1, {1.732, 0});
+    QString lab = edits::attachGroup(e, e1, "Ac");
+    CHECK(lab != e1);
+    CHECK(e.molecules[0].atom(lab)->label == "Ac");
+    CHECK(chem::info(e.molecules[0]).smiles == "CC(=O)C(C)C");
+
+    // A custom group (trityl) works in formulas and expands like a built-in.
+    CHECK(labels::checkGroup("Tr", "C(c1ccccc1)c1ccccc1").contains("*"));
+    CHECK(labels::checkGroup("C", "*C").contains("element"));
+    CHECK(labels::checkGroup("Tr", "*C(c1ccccc1)(c1ccccc1)c1ccccc1").isEmpty());
+    labels::setCustomGroups({{"Tr", "*C(c1ccccc1)(c1ccccc1)c1ccccc1"}});
+    Document t;
+    QString o2 = edits::addAtom(t, {5, 0}, "O");
+    QString tr = edits::bondToPoint(t, o2, {6, 0});
+    edits::attachGroup(t, tr, "Tr");
+    const Molecule* trMol = t.moleculeOfAtom(tr);
+    CHECK(chem::info(*trMol).formula == "C19H16O");  // triphenylmethanol
+    CHECK(labels::tokens("OTr") == QStringList{"O", "Tr"});
+    // Saved files carry the definition; on a computer without it, opening the file brings it back.
+    QByteArray json = io::toJson(t, false);
+    CHECK(json.contains("\"groups\""));
+    labels::setCustomGroups({});
+    CHECK(labels::fragmentSmiles("Tr").isEmpty());
+    auto back = io::fromJson(json);
+    REQUIRE(back);
+    CHECK(labels::fragmentSmiles("Tr") == "*C(c1ccccc1)(c1ccccc1)c1ccccc1");
+    CHECK(chem::info(*back->moleculeOfAtom(tr)).formula == "C19H16O");
+}

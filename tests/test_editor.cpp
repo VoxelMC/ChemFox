@@ -441,3 +441,164 @@ TEST_CASE("snapshot: keyboard shortcuts dialog") {
     QApplication::processEvents();
     dlg.grab().save(dir + "/shortcuts_hover.png");
 }
+
+TEST_CASE("keyboard chains follow the newest atom and lean toward the mouse") {
+    testApp();
+    Driver d;
+    Document doc;
+    QString first = edits::addAtom(doc, {5, 5});
+    d.c.setDocument(doc);
+    // Three presses of 1 without moving the mouse: a chain of three bonds, not a star.
+    d.move(d.atomPos(*d.mol().atom(first)));
+    for (int i = 0; i < 3; ++i) d.key(Qt::Key_1, "1");
+    REQUIRE(d.mol().atoms.size() == 4);
+    CHECK(d.mol().neighbors(first).size() == 1);
+    int ends = 0;
+    for (const auto& a : d.mol().atoms) ends += d.mol().neighbors(a.id).size() == 1;
+    CHECK(ends == 2);
+    // It keeps building from the newest atom wherever the mouse goes, even over another atom...
+    d.move(d.atomPos(*d.mol().atom(first)));
+    d.key(Qt::Key_1, "1");
+    CHECK(d.mol().neighbors(first).size() == 1);
+    // ...until Escape: then keys act on what's under the mouse again.
+    d.key(Qt::Key_Escape, "");
+    d.move(d.atomPos(*d.mol().atom(first)) + QPointF(1, 0));
+    d.key(Qt::Key_1, "1");
+    CHECK(d.mol().neighbors(first).size() == 2);
+
+    // A chain end: the mouse just above the atom picks the upper zig, just below the lower one.
+    for (double side : {-1.0, 1.0}) {
+        Document e;
+        QString a = edits::addAtom(e, {5, 5});
+        QString b = edits::bondToPoint(e, a, {6, 5});
+        d.c.setDocument(e);
+        d.move(d.c.modelToScreen(QPointF(6, 5 + 0.22 * side)));
+        d.key(Qt::Key_1, "1");
+        REQUIRE(d.mol().atoms.size() == 3);
+        const Atom& tip = d.mol().atoms.back();
+        CHECK(tip.y * side > 5 * side + 0.5);
+        // Now moving the mouse off into empty space keeps the new atom hovered and steers the next
+        // bond toward the mouse, even against the usual zig-zag.
+        QPointF tipPos = tip.pos();
+        QString tipId = tip.id;
+        d.move(d.c.modelToScreen(tipPos + QPointF(-1.0, 1.6 * side)));
+        d.key(Qt::Key_1, "1");
+        REQUIRE(d.mol().atoms.size() == 4);
+        const Atom& next = d.mol().atoms.back();
+        CHECK(d.mol().bondBetween(tipId, next.id));
+        CHECK(next.x < tipPos.x() - 0.3);
+        CHECK(next.y * side > tipPos.y() * side + 0.5);
+    }
+}
+
+TEST_CASE("continue reaction: arrow and an editable copy in the chosen direction") {
+    testApp();
+    Driver d;
+    d.c.insertMolecules({*chem::fromSmiles("CCO")}, QPointF(5, 5));
+    QString smi = chem::smiles(d.mol());
+    QPointF c0 = d.mol().center();
+    d.c.selectAll();
+    d.c.command("reaction.continueRight");
+    REQUIRE(d.c.doc().molecules.size() == 2);
+    REQUIRE(d.c.doc().arrows.size() == 1);
+    const Arrow& r = d.c.doc().arrows[0];
+    const Molecule& copy = d.c.doc().molecules[1];
+    CHECK(chem::smiles(copy) == smi);
+    CHECK(r.x2 > r.x1);
+    CHECK(std::abs(r.y1 - r.y2) < 1e-9);
+    CHECK(std::abs(r.y1 - c0.y()) < 0.5);
+    CHECK(d.mol(0).bounds().right() < r.x1);
+    CHECK(copy.bounds().left() > r.x2);
+    CHECK(std::abs(copy.center().y() - c0.y()) < 1e-6);
+    // The copy is selected, so the next one carries on from it; down goes below.
+    CHECK(d.c.selection() == QSet<QString>{copy.id});
+    QString copyId = copy.id;
+    d.c.command("reaction.continueDown");
+    REQUIRE(d.c.doc().molecules.size() == 3);
+    REQUIRE(d.c.doc().arrows.size() == 2);
+    const Arrow& down = d.c.doc().arrows[1];
+    CHECK(down.y2 > down.y1);
+    CHECK(d.c.doc().molecule(copyId)->bounds().bottom() < down.y1);
+    CHECK(d.c.doc().molecules[2].bounds().top() > down.y2);
+    // One undo removes the step.
+    d.c.undoStack()->undo();
+    CHECK(d.c.doc().molecules.size() == 2);
+    CHECK(d.c.doc().arrows.size() == 1);
+}
+TEST_CASE("Shift+C puts an acetyl on the hovered atom") {
+    testApp();
+    Driver d;
+    Document doc;
+    QString a = edits::addAtom(doc, {5, 5});
+    QString b = edits::bondToPoint(doc, a, {6, 5});
+    d.c.setDocument(doc);
+    d.move(d.atomPos(*d.mol().atom(b)));
+    d.key(Qt::Key_C, "C", Qt::ShiftModifier);
+    CHECK(d.mol().atom(b)->label == "Ac");
+}
+TEST_CASE("continue reaction maps the copy and shows bond changes; the toggle turns it off") {
+    testApp();
+    Driver d;
+    d.c.insertMolecules({*chem::fromSmiles("CC(=O)O")}, QPointF(5, 5));
+    d.c.selectAll();
+    d.c.command("reaction.continueRight");
+    REQUIRE(d.c.doc().molecules.size() == 2);
+    const Molecule& r = d.c.doc().molecules[0];
+    const Molecule& p = d.c.doc().molecules[1];
+    REQUIRE(r.atoms.size() == p.atoms.size());
+    for (size_t i = 0; i < r.atoms.size(); ++i) {
+        CHECK(r.atoms[i].map != 0);
+        CHECK(r.atoms[i].map == p.atoms[i].map);
+    }
+    QString arrow = d.c.doc().arrows[0].id;
+    CHECK(d.c.showsBondChanges(arrow));
+    d.c.toggleBondChanges({arrow});
+    CHECK_FALSE(d.c.showsBondChanges(arrow));
+    d.c.toggleBondChanges();
+    CHECK(d.c.showsBondChanges(arrow));
+}
+TEST_CASE("E expands and collapses labels; focus moves with arrow keys and starts by clicking a selected atom") {
+    testApp();
+    Driver d;
+    Document doc;
+    QString a = edits::addAtom(doc, {5, 5});
+    QString b = edits::bondToPoint(doc, a, {6, 5});
+    edits::setLabel(doc, b, "Ac");
+    d.c.setDocument(doc);
+    // E on the label expands it (acetyl: C, C, O), E on one of its atoms collapses it again.
+    d.move(d.atomPos(*d.mol().atom(b)));
+    d.key(Qt::Key_E, "e");
+    REQUIRE(d.mol().atoms.size() == 4);
+    CHECK(d.mol().atom(b)->label.isEmpty());
+    d.key(Qt::Key_E, "e");
+    CHECK(d.mol().atoms.size() == 2);
+    CHECK(d.mol().atom(b)->label == "Ac");
+
+    // Click the structure to select it, then click atom a: a becomes the focused atom.
+    Document chain;
+    QString c0 = edits::addAtom(chain, {5, 5});
+    QString c1 = edits::bondToPoint(chain, c0, {5.866, 4.5});
+    QString c2 = edits::bondToPoint(chain, c1, {6.732, 5});
+    d.c.setDocument(chain);
+    QPointF p0 = d.atomPos(*d.mol().atom(c0));
+    d.move(p0);
+    d.press(p0);
+    d.release(p0);
+    CHECK(d.c.focusedAtom().isEmpty());
+    d.press(p0);
+    d.release(p0);
+    CHECK(d.c.focusedAtom() == c0);
+    // Right arrow walks along the zig-zag; left comes back; nothing to the left of c0 keeps it there.
+    d.key(Qt::Key_Right, "");
+    CHECK(d.c.focusedAtom() == c1);
+    d.key(Qt::Key_Right, "");
+    CHECK(d.c.focusedAtom() == c2);
+    d.key(Qt::Key_Left, "");
+    d.key(Qt::Key_Left, "");
+    d.key(Qt::Key_Left, "");
+    CHECK(d.c.focusedAtom() == c0);
+    // Keys act on the focused atom wherever the mouse is: 1 grows from c0, even with the mouse far away.
+    d.move({20, 20});
+    d.key(Qt::Key_1, "1");
+    CHECK(d.mol().neighbors(c0).size() == 2);
+}

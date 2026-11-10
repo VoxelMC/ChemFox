@@ -72,6 +72,8 @@ private:
     void fillHover();
     void assignCommand(const QKeySequence& key);
     void setHover(const QString& key, bool add);
+    QWidget* buildGroupsTab();
+    void fillGroups();
 
     ShortcutRegistry& reg_;
     Canvas* canvas_;
@@ -83,6 +85,11 @@ private:
     QLineEdit* hoverFilter_;
     KeyCapture* hoverKey_;
     QLabel* hoverNote_;
+    QTreeWidget* groupTree_;
+    QLineEdit* groupName_;
+    QLineEdit* groupSmiles_;
+    KeyCapture* groupKey_;
+    QLabel* groupNote_;
 };
 
 }  // namespace cd

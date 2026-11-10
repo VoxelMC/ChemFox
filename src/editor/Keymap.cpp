@@ -1,5 +1,7 @@
 #include "editor/Keymap.h"
 
+#include "core/model/Labels.h"
+
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
@@ -27,6 +29,8 @@ Keymap::Map Keymap::defaults() {
     for (int n = 3; n <= 8; ++n) atom[QString("Shift+%1").arg(n)] = QString("ring:%1").arg(n);
     atom["R"] = "benzene";
     atom["Shift+N"] = "number";
+    atom["Shift+C"] = "group:Ac";
+    atom["E"] = "expand";
 
     auto& bond = m["bond"];
     bond["1"] = "order:1";
@@ -54,6 +58,7 @@ Keymap::Map Keymap::defaults() {
     empty["I"] = "element:I";
     for (int n = 3; n <= 8; ++n) empty[QString("Shift+%1").arg(n)] = QString("ring:%1").arg(n);
     empty["R"] = "benzene";
+    empty["Shift+C"] = "group:Ac";
     empty["A"] = "arrow";
     empty["T"] = "text";
 
@@ -131,7 +136,7 @@ std::vector<std::pair<QString, QString>> Keymap::availableActions() {
     for (const auto& el : elements) out.push_back({"atom", "element:" + el});
     for (const char* a : {"label", "charge:+1", "charge:-1", "radical", "grow:1", "grow:2", "grow:3"}) out.push_back({"atom", a});
     for (int n = 3; n <= 8; ++n) out.push_back({"atom", QString("ring:%1").arg(n)});
-    for (const char* a : {"benzene", "number"}) out.push_back({"atom", a});
+    for (const char* a : {"benzene", "number", "expand"}) out.push_back({"atom", a});
     for (const char* a : {"order:1", "order:2", "order:3", "stereo:wedge", "stereo:hash", "stereo:wavy", "flip"})
         out.push_back({"bond", a});
     for (int n = 3; n <= 8; ++n) out.push_back({"bond", QString("ring:%1").arg(n)});
@@ -143,6 +148,12 @@ std::vector<std::pair<QString, QString>> Keymap::availableActions() {
     for (const auto& el : elements) out.push_back({"empty", "element:" + el});
     for (int n = 3; n <= 8; ++n) out.push_back({"empty", QString("ring:%1").arg(n)});
     for (const char* a : {"benzene", "arrow", "text"}) out.push_back({"empty", a});
+    // Groups: the common built-ins and every custom one, on atoms and on empty canvas.
+    QStringList groups = {"Ac", "Me", "Et", "iPr", "tBu", "Ph", "Bn", "Bz", "Boc", "Cbz", "Ts", "TBS",
+                          "OH", "OMe", "OAc", "NH2", "CO2H", "CO2Me", "CO2Et", "CHO", "CN", "CF3", "NO2"};
+    for (const auto& g : labels::customGroups().keys()) if (!groups.contains(g)) groups << g;
+    for (const char* t : {"atom", "empty"})
+        for (const auto& g : groups) out.push_back({t, "group:" + g});
     for (const char* a : {"delete", "cycle", "escape", "tool:select", "tool:chain", "tool:arrow", "tool:bent", "tool:text", "mapmode"})
         out.push_back({"any", a});
     return out;
@@ -155,7 +166,7 @@ QString Keymap::describe(const QString& action) {
         {"number", "Compound name / number"}, {"flip", "Flip wedge or double-bond side"},
         {"annotate", "Edit conditions"}, {"kind", "Next arrow kind"}, {"edit", "Edit"}, {"arrow", "New arrow"},
         {"text", "New text"}, {"delete", "Delete"}, {"cycle", "Next overlapping target"}, {"escape", "Cancel / deselect"},
-        {"mapmode", "Toggle mapping mode"}};
+        {"mapmode", "Toggle mapping mode"}, {"expand", "Expand / collapse group label"}};
     if (plain.contains(verb)) return plain[verb];
     if (verb == "element") return "Element " + arg;
     if (verb == "charge") return arg.startsWith('+') ? "Increase charge" : "Decrease charge";
@@ -163,6 +174,7 @@ QString Keymap::describe(const QString& action) {
     if (verb == "order") return QStringList{"", "Single bond", "Double bond", "Triple bond"}.value(arg.toInt(), action);
     if (verb == "stereo") return arg == "wedge" ? "Wedge" : arg == "hash" ? "Hash" : "Wavy";
     if (verb == "ring") return arg + "-membered ring";
+    if (verb == "group") return "Group " + arg + (labels::customGroups().contains(arg) ? " (custom)" : "");
     if (verb == "tool") return QString("%1 tool").arg(arg.left(1).toUpper() + arg.mid(1));
     return action;
 }

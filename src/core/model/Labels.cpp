@@ -8,7 +8,10 @@ namespace cd::labels {
 
 namespace {
 
-const QHash<QString, QString>& table() {
+int& generationRef() { static int g = 0; return g; }
+int generation() { return generationRef(); }
+
+const QHash<QString, QString>& builtins() {
     static const QHash<QString, QString> t = {
         {"Me", "*C"}, {"Et", "*CC"}, {"Pr", "*CCC"}, {"nPr", "*CCC"}, {"iPr", "*C(C)C"},
         {"Bu", "*CCCC"}, {"nBu", "*CCCC"}, {"tBu", "*C(C)(C)C"}, {"iBu", "*CC(C)C"},
@@ -45,15 +48,36 @@ const QHash<QString, QString>& table() {
     return t;
 }
 
+// The user's own groups (groups.json) and ones met in opened files, which never replace the user's.
+QMap<QString, QString>& userGroups() { static QMap<QString, QString> g; return g; }
+QMap<QString, QString>& fileGroups() { static QMap<QString, QString> g; return g; }
+
+// Built-ins, then file groups, then the user's: the later wins.
+const QHash<QString, QString>& table() {
+    static QHash<QString, QString> t;
+    static int builtAt = -1;
+    if (builtAt != generation()) {
+        t = builtins();
+        for (auto it = fileGroups().begin(); it != fileGroups().end(); ++it) t[it.key()] = it.value();
+        for (auto it = userGroups().begin(); it != userGroups().end(); ++it) t[it.key()] = it.value();
+        builtAt = generation();
+    }
+    return t;
+}
+
 // Multi-letter group names that must stay as one display token.
 const QStringList& groupNames() {
-    static const QStringList g = [] {
-        QStringList l = {"CoA", "TBDMS", "TIPS", "Fmoc", "TBS", "TMS", "PMB", "Piv", "Boc", "Cbz", "nPr", "iPr",
-                         "nBu", "tBu", "iBu", "pin", "Ph", "Bn", "Bz", "Ac", "Ts", "Ms", "Tf", "Me",
-                         "Et", "Pr", "Bu"};
-        std::sort(l.begin(), l.end(), [](const QString& a, const QString& b) { return a.size() > b.size(); });
-        return l;
-    }();
+    static QStringList g;
+    static int builtAt = -1;
+    if (builtAt != generation()) {
+        g = {"CoA", "TBDMS", "TIPS", "Fmoc", "TBS", "TMS", "PMB", "Piv", "Boc", "Cbz", "nPr", "iPr",
+             "nBu", "tBu", "iBu", "pin", "Ph", "Bn", "Bz", "Ac", "Ts", "Ms", "Tf", "Me", "Et", "Pr", "Bu"};
+        // Custom names are single tokens too, except ones that are plain formulas ("CH2Cl").
+        for (const auto& n : fileGroups().keys() + userGroups().keys())
+            if (!g.contains(n) && parseCondensed(n).isEmpty()) g << n;
+        std::sort(g.begin(), g.end(), [](const QString& a, const QString& b) { return a.size() > b.size(); });
+        builtAt = generation();
+    }
     return g;
 }
 
@@ -71,12 +95,44 @@ const QStringList& elementSymbols() {
 }  // namespace
 
 const QStringList& knownAbbreviations() {
-    static const QStringList k = [] {
-        QStringList l = table().keys();
-        l.sort();
-        return l;
-    }();
+    static QStringList k;
+    static int builtAt = -1;
+    if (builtAt != generation()) {
+        k = table().keys();
+        k.sort();
+        builtAt = generation();
+    }
     return k;
+}
+
+QMap<QString, QString> customGroups() { return userGroups(); }
+QMap<QString, QString> documentGroups() { return fileGroups(); }
+bool isBuiltin(const QString& name) { return builtins().contains(name); }
+
+void setCustomGroups(const QMap<QString, QString>& groups) {
+    userGroups() = groups;
+    ++generationRef();
+}
+
+void addFileGroups(const QMap<QString, QString>& groups) {
+    bool changed = false;
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        if (userGroups().contains(it.key()) || builtins().value(it.key()) == it.value()) continue;
+        if (fileGroups().value(it.key()) != it.value()) { fileGroups()[it.key()] = it.value(); changed = true; }
+    }
+    if (changed) ++generationRef();
+}
+
+int groupsGeneration() { return generation(); }
+
+QString checkGroup(const QString& name, const QString& smiles) {
+    static const QRegularExpression okName("^[A-Za-z][A-Za-z0-9()]*$");
+    if (!okName.match(name).hasMatch()) return "Names start with a letter and use letters, digits and brackets.";
+    if (isElementSymbol(name)) return name + " is an element symbol.";
+    QString s = smiles.trimmed();
+    int stars = s.count('*');
+    if (stars != 1) return "Mark the attachment point with exactly one * (e.g. *C(C)=O for acetyl).";
+    return {};
 }
 
 bool isElementSymbol(const QString& text) { return elementSymbols().contains(text); }

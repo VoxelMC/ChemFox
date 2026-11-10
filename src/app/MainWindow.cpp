@@ -227,6 +227,14 @@ void MainWindow::buildMenus() {
     rxn->addAction("A&lign Products to Reactants", QKeySequence("Ctrl+Shift+L"), canvas_, &Canvas::alignAllProducts)
         ->setStatusTip("Redraw each product so the part it shares with its reactant matches (selection only, if any)");
     rxn->addAction("&Number Compounds", QKeySequence("Ctrl+Shift+N"), canvas_, &Canvas::numberCompounds);
+    // Ctrl is Cmd on macOS.
+    auto* cont = rxn->addMenu("&Continue Reaction");
+    cmd(cont, "Right →", "reaction.continueRight")->setShortcut(QKeySequence("Ctrl+Right"));
+    cmd(cont, "Left ←", "reaction.continueLeft")->setShortcut(QKeySequence("Ctrl+Left"));
+    cmd(cont, "Up ↑", "reaction.continueUp")->setShortcut(QKeySequence("Ctrl+Up"));
+    cmd(cont, "Down ↓", "reaction.continueDown")->setShortcut(QKeySequence("Ctrl+Down"));
+    cont->setToolTipsVisible(true);
+    cont->menuAction()->setStatusTip("Arrow from the selected structure plus a copy of it to edit into the product");
     QAction* mapMode = rxn->addAction("Edit &Mapping");
     mapMode->setCheckable(true);
     mapMode->setShortcut(QKeySequence("Ctrl+M"));
@@ -241,6 +249,8 @@ void MainWindow::buildMenus() {
     cmd(arrowMenu, "Next Head Style", "arrow.nextHead");
     cmd(arrowMenu, "Heads at Both Ends", "arrow.bothHeads");
     cmd(arrowMenu, "Next Line Style", "arrow.nextLine");
+    cmd(arrowMenu, "Show Bond Changes", "arrow.toggleDiff")
+        ->setStatusTip("Colour bonds broken, formed and changed (the hovered or selected arrow's step, else every step)");
     stepLetters_ = rxn->addAction("Step &Letters");
     stepLetters_->setCheckable(true);
     connect(stepLetters_, &QAction::toggled, canvas_, &Canvas::setStepLetters);
@@ -335,8 +345,17 @@ void MainWindow::buildMenus() {
     toolbar_ = tb;
     tb->setObjectName("mainToolbar");
     tb->setMovable(false);
-    tb->addAction(undo);
-    tb->addAction(redo);
+    // Toolbar buttons keep a fixed "Undo"/"Redo" so they never change width and shift the buttons
+    // beside them; what they'd undo shows in the tooltip. (The menu items keep the full text.)
+    for (QAction* src : {undo, redo}) {
+        QAction* b = tb->addAction(src == undo ? "Undo" : "Redo", src, &QAction::trigger);
+        auto sync = [b, src] {
+            b->setEnabled(src->isEnabled());
+            b->setToolTip(QString(src->text()).remove('&') + " (" + src->shortcut().toString(QKeySequence::NativeText) + ")");
+        };
+        connect(src, &QAction::changed, b, sync);
+        sync();
+    }
     tb->addSeparator();
     tb->addAction("Clean", canvas_, &Canvas::cleanStructure)->setToolTip("Clean structure (Ctrl+L)");
     tb->addAction("Arrange scheme", canvas_, &Canvas::arrangeScheme)->setToolTip("Lay out the reaction scheme (Ctrl+Shift+A)");

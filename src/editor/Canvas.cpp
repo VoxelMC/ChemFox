@@ -21,6 +21,7 @@
 #include <QFormLayout>
 #include <QInputDialog>
 #include <QKeyEvent>
+#include <QResizeEvent>
 #include <QLabel>
 #include <QMimeData>
 #include <QPainter>
@@ -50,6 +51,7 @@ void Canvas::setDocument(const Document& d) {
     undo_.clear();
     doc_ = d;
     selected_.clear();
+    stickyAtom_.clear();
     if (doc_.needsLayout) {
         // Generated coordinates (e.g. SMILES-only files): arrange arrows and structures.
         doc_.needsLayout = false;
@@ -64,7 +66,13 @@ void Canvas::setDocument(const Document& d) {
     zoomToFit();
 }
 
+void Canvas::resizeEvent(QResizeEvent* e) {
+    QWidget::resizeEvent(e);
+    if (fitPending_) zoomToFit();
+}
+
 void Canvas::edit(const QString& text, const std::function<void(Document&)>& fn, int mergeKey) {
+    fitPending_ = false;
     Document after = doc_;
     fn(after);
     // Keep compound numbers in scheme order as things change.
@@ -124,6 +132,12 @@ void Canvas::resolveStyle() {
 }
 
 void Canvas::recompute() {
+    // A changed group table changes what labelled atoms mean: drop chemistry computed with the old one.
+    if (groupsGen_ != labels::groupsGeneration()) {
+        analysisCache_.clear();
+        infoCache_.clear();
+        groupsGen_ = labels::groupsGeneration();
+    }
     resolveStyle();
     overlay_ = ChemOverlay{};
     analyses_.clear();
@@ -204,6 +218,12 @@ std::vector<Hit> Canvas::hitTest(QPointF screen) const {
 void Canvas::updateHover(QPointF screen) {
     QString before = hover().id + QString::number(hover().kind);
     auto hits = mouseInside_ ? hitTest(screen) : std::vector<Hit>{};
+    if (!stickyAtom_.isEmpty()) {
+        // A keyboard chain keeps its atom wherever the mouse goes, until Escape or a click.
+        const Molecule* m = doc_.moleculeOfAtom(stickyAtom_);
+        if (m && drag_ == Drag::None) hits = {Hit{Hit::AtomHit, stickyAtom_, m->id, 0}};
+        else stickyAtom_.clear();
+    }
     bool same = hits.size() == hits_.size();
     for (size_t i = 0; same && i < hits.size(); ++i) same = hits[i].id == hits_[i].id && hits[i].kind == hits_[i].kind;
     hits_ = hits;
@@ -303,7 +323,18 @@ void Canvas::paintEvent(QPaintEvent*) {
     }
     for (const auto& w : active_) deco.warned.insert(w.target());
     deco.editingId = editingId_;
+    const Molecule* stickyMol = stickyAtom_.isEmpty() ? nullptr : doc_.moleculeOfAtom(stickyAtom_);
+    if (stickyMol) deco.hoverId.clear();  // the orange mark below says where keys go
     renderer_.draw(p, doc_, overlay_, &deco);
+
+    // The atom a keyboard chain is growing from: light orange.
+    if (stickyMol) {
+        QPointF c = renderer_.toPt(stickyMol->atom(stickyAtom_)->pos());
+        double r = style_.bondLength * 0.3;
+        p.setPen(QPen(QColor(245, 150, 50), style_.lineWidth * 0.8));
+        p.setBrush(QColor(255, 180, 100, 90));
+        p.drawEllipse(c, r, r);
+    }
 
     // Warning markers on arrows.
     for (const auto& w : active_) {
@@ -360,6 +391,7 @@ void Canvas::mousePressEvent(QMouseEvent* e) {
     setFocus();
     lastMouse_ = e->position();
     mouseInside_ = true;
+    stickyAtom_.clear();
     updateHover(e->position());
     pressScreen_ = e->position();
     pressModel_ = toModel(e->position());
@@ -479,6 +511,7 @@ void Canvas::mouseMoveEvent(QMouseEvent* e) {
 
     switch (drag_) {
     case Drag::Pan:
+        fitPending_ = false;
         pan_ += pos - prev;
         break;
     case Drag::BondFromAtom: {
@@ -617,6 +650,16 @@ void Canvas::mouseReleaseEvent(QMouseEvent* e) {
     case Drag::BondFromAtom: {
         const QString startId = pressHit_.id;
         if (!dragMoved_) {
+            // A click on an atom of a structure that's already selected focuses that atom (orange):
+            // keys then act on it, as when building a chain from the keyboard.
+            const bool inSelection = selected_.contains(pressHit_.molId) || selected_.contains(startId);
+            if (inSelection && !shift && !(e->modifiers() & Qt::AltModifier)) {
+                stickyAtom_ = startId;
+                updateHover(pos);
+                update();
+                emit status("Focused atom: keys act on it, arrow keys move to a neighbour, Esc finishes.");
+                break;
+            }
             clickSelect((e->modifiers() & Qt::AltModifier) ? startId : pressHit_.molId);
             break;
         }
@@ -721,6 +764,7 @@ void Canvas::mouseDoubleClickEvent(QMouseEvent* e) {
 }
 
 void Canvas::wheelEvent(QWheelEvent* e) {
+    fitPending_ = false;
     if (e->modifiers() & Qt::ShiftModifier) {
         pan_ += QPointF(e->angleDelta().y(), e->angleDelta().x()) * 0.5;
         update();
@@ -778,6 +822,10 @@ void Canvas::keyPressEvent(QKeyEvent* e) {
     // Arrow keys nudge the selection.
     const QHash<int, QPointF> nudge = {{Qt::Key_Left, {-1, 0}}, {Qt::Key_Right, {1, 0}},
                                        {Qt::Key_Up, {0, -1}}, {Qt::Key_Down, {0, 1}}};
+    if (nudge.contains(e->key()) && !stickyAtom_.isEmpty() && !(e->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
+        moveFocus(nudge[e->key()]);
+        return;
+    }
     if (nudge.contains(e->key()) && !(e->modifiers() & (Qt::ControlModifier | Qt::AltModifier))) {
         if (selected_.isEmpty()) return;
         QPointF dlt = nudge[e->key()] * ((e->modifiers() & Qt::ShiftModifier) ? 0.5 : 0.05);
@@ -799,8 +847,18 @@ void Canvas::keyPressEvent(QKeyEvent* e) {
         return;
     }
 
+    if (key == "Escape" && !stickyAtom_.isEmpty()) {
+        // Ends a keyboard chain (and deselects, as Escape always does).
+        stickyAtom_.clear();
+        selected_.clear();
+        updateHover(lastMouse_);
+        update();
+        emit infoTargetChanged();
+        return;
+    }
+
     Hit h = hover();
-    QString target = mouseInside_ ? hoverTargetName(h) : QString();
+    QString target = (mouseInside_ || !stickyAtom_.isEmpty()) ? hoverTargetName(h) : QString();
     if (target.isEmpty() && !selected_.isEmpty()) {
         applyToSelection(key);
         return;
@@ -907,9 +965,51 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
         else if (verb == "label") editLabel(id);
         else if (verb == "charge") edit("Charge", [&](Document& d) { edits::changeCharge(d, id, arg.toInt()); });
         else if (verb == "radical") edit("Radical", [&](Document& d) { edits::toggleRadical(d, id); });
-        else if (verb == "grow") edit("Add bond", [&](Document& d) { edits::growBond(d, id, arg.toInt()); });
-        else if (verb == "ring") edit("Add ring", [&](Document& d) { edits::attachRing(d, id, arg.toInt(), false); });
-        else if (verb == "benzene") edit("Add benzene", [&](Document& d) { edits::attachRing(d, id, 6, true); });
+        else if (verb == "grow") {
+            // Lean toward the mouse (growBond ignores it when it's behind the chain end, so a mouse
+            // left where the chain started doesn't curl the chain back).
+            std::optional<QPointF> toward;
+            const Molecule* m = doc_.moleculeOfAtom(id);
+            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            QString newAtom;
+            edit("Add bond", [&](Document& d) { newAtom = edits::growBond(d, id, arg.toInt(), toward); });
+            if (!newAtom.isEmpty() && newAtom != id) {
+                stickyAtom_ = newAtom;
+                updateHover(lastMouse_);
+                update();
+            }
+        }
+        else if (verb == "ring" || verb == "benzene") {
+            // Like a new bond, a ring hung off a chain leans toward the mouse.
+            std::optional<QPointF> toward;
+            const Molecule* m = doc_.moleculeOfAtom(id);
+            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            bool benz = verb == "benzene";
+            edit(benz ? "Add benzene" : "Add ring",
+                 [&](Document& d) { edits::attachRing(d, id, benz ? 6 : arg.toInt(), benz, toward); });
+        }
+        else if (verb == "expand") {
+            // A label expands to its structure; an atom of an expanded group collapses it back.
+            const Molecule* m = doc_.moleculeOfAtom(id);
+            QString anchor;
+            for (const auto& g : m->groups) if (g.atoms.contains(id)) anchor = g.anchor;
+            if (chem::canExpand(*m->atom(id))) {
+                edit("Expand label", [&](Document& d) { chem::expandLabel(d, id); });
+            } else if (!anchor.isEmpty()) {
+                QString molId = m->id;
+                edit("Collapse label", [&](Document& d) { edits::contractGroup(d, molId, anchor); });
+                if (!stickyAtom_.isEmpty()) stickyAtom_ = anchor;  // the focused atom may be gone: back to the label
+                updateHover(lastMouse_);
+            } else {
+                emit status("Nothing to expand here: this atom has no group label.");
+            }
+        }
+        else if (verb == "group") {
+            std::optional<QPointF> toward;
+            const Molecule* m = doc_.moleculeOfAtom(id);
+            if (m && mouseInside_ && len(cursor - m->atom(id)->pos()) > 0.15) toward = cursor;
+            edit("Add " + arg, [&](Document& d) { edits::attachGroup(d, id, arg, toward); });
+        }
         else if (verb == "number") editCompound(h.molId);
         return;
     case Hit::BondHit:
@@ -939,6 +1039,7 @@ void Canvas::runAction(const QString& action, const Hit& h, QPointF cursor) {
     if (verb == "element") edit("Add atom", [&](Document& d) { edits::addAtom(d, cursor, arg); });
     else if (verb == "ring") edit("Add ring", [&](Document& d) { edits::placeRing(d, cursor, arg.toInt(), false); });
     else if (verb == "benzene") edit("Add benzene", [&](Document& d) { edits::placeRing(d, cursor, 6, true); });
+    else if (verb == "group") edit("Add " + arg, [&](Document& d) { edits::setLabel(d, edits::addAtom(d, cursor), arg); });
     else if (verb == "arrow") edit("Add arrow", [&](Document& d) { edits::addArrow(d, cursor - QPointF(1.5, 0), 3.0); });
     else if (verb == "text") {
         bool ok = false;
@@ -1335,6 +1436,7 @@ void Canvas::paste() {
 
 void Canvas::zoomBy(double factor, QPointF anchor) {
     if (anchor.isNull()) anchor = rect().center();
+    fitPending_ = false;
     double nz = std::clamp(zoom_ * factor, 0.15, 30.0);
     pan_ = anchor - (anchor - pan_) * (nz / zoom_);
     zoom_ = nz;
@@ -1343,6 +1445,7 @@ void Canvas::zoomBy(double factor, QPointF anchor) {
 }
 
 void Canvas::resetZoom() {
+    fitPending_ = false;
     zoom_ = 2.0 * 15.0 / style_.bondLength;
     pan_ = QPointF(60, 60);
     update();
@@ -1350,7 +1453,9 @@ void Canvas::resetZoom() {
 
 void Canvas::zoomToFit() {
     QRectF b = renderer_.documentBounds(doc_, overlay_);
-    if (b.isNull() || width() < 10) { resetZoom(); return; }
+    if (b.isNull()) { resetZoom(); return; }
+    fitPending_ = true;  // stay fitted through resizes until the user pans, zooms or edits
+    if (width() < 10) return;
     b.adjust(-20, -20, 20, 20);
     zoom_ = std::clamp(std::min(width() / b.width(), height() / b.height()), 0.15, 4.0 * 15.0 / style_.bondLength);
     pan_ = QPointF(width() / 2.0, height() / 2.0) - b.center() * zoom_;
@@ -1553,6 +1658,9 @@ void Canvas::showContextMenu(QPointF screen) {
         menu.addAction("Swap Above / Below Text", this, [this, arrowId] {
             edit("Swap arrow text", [&](Document& d) { Arrow* x = d.arrow(arrowId); std::swap(x->above, x->below); });
         });
+        QAction* diff = menu.addAction("Show Bond Changes", this, [this, arrowId] { toggleBondChanges({arrowId}); });
+        diff->setCheckable(true);
+        diff->setChecked(showsBondChanges(arrowId));
         menu.addAction("Reverse Direction", this, [this, arrowId] {
             edit("Reverse arrow", [&](Document& d) {
                 Arrow* x = d.arrow(arrowId);
@@ -1687,10 +1795,120 @@ QStringList Canvas::commandIds() {
     return {"structure.flipH", "structure.flipV", "structure.rotateCW", "structure.rotateCCW", "structure.rotate180",
             "structure.align", "structure.toggleStereo", "structure.toggleCarbons", "structure.expandLabels",
             "structure.collapseLabels", "copy.smiles", "copy.inchi", "copy.inchikey", "copy.mol", "copy.image",
-            "arrow.swapText", "arrow.reverse", "arrow.straighten", "arrow.nextHead", "arrow.nextLine", "arrow.bothHeads"};
+            "arrow.swapText", "arrow.reverse", "arrow.straighten", "arrow.nextHead", "arrow.nextLine", "arrow.bothHeads",
+            "arrow.toggleDiff", "reaction.continueRight", "reaction.continueLeft", "reaction.continueUp", "reaction.continueDown"};
+}
+
+void Canvas::continueReaction(QPointF dir) {
+    // The selected structures (or the hovered one): a whole molecule counts if any part is selected.
+    QStringList mols;
+    auto addMol = [&](const Molecule* m) { if (m && !mols.contains(m->id)) mols << m->id; };
+    for (const auto& s : selected_) {
+        if (const Molecule* m = doc_.molecule(s)) addMol(m);
+        else if (const Molecule* m = doc_.moleculeOfAtom(s)) addMol(m);
+        else addMol(doc_.moleculeOfBond(s));
+    }
+    if (mols.isEmpty() && mouseInside_ && !hover().molId.isEmpty()) addMol(doc_.molecule(hover().molId));
+    if (mols.isEmpty()) { emit status("Select a structure first, then Ctrl+arrow key continues the reaction from it."); return; }
+
+    // Lay out in points, like Arrange Scheme: structure, gap, arrow, gap, copy.
+    QRectF body, withNames;
+    for (const auto& id : mols) {
+        const Molecule* m = doc_.molecule(id);
+        QRectF r = renderer_.moleculeRect(*m, overlay_);
+        body = body.isNull() ? r : body.united(r);
+        QRectF n = renderer_.numberRect(*m, overlay_);
+        r = n.isNull() ? r : r.united(n);
+        withNames = withNames.isNull() ? r : withNames.united(r);
+    }
+    const double gap = style_.schemeSpacing, L = style_.arrowMinLength;
+    const bool horizontal = std::abs(dir.x()) > 0.5;
+    // The arrow leaves from the edge it points out of (below the names when going down).
+    const QRectF& from = dir.y() > 0.5 ? withNames : body;
+    QPointF edge = horizontal ? QPointF(dir.x() > 0 ? from.right() : from.left(), body.center().y())
+                              : QPointF(body.center().x(), dir.y() > 0 ? from.bottom() : from.top());
+    QPointF tail = edge + dir * gap, head = tail + dir * L;
+    // The copy's near side sits one gap past the head.
+    double nearSide = horizontal ? (dir.x() > 0 ? body.left() : body.right()) : (dir.y() > 0 ? body.top() : body.bottom());
+    double target = horizontal ? head.x() + dir.x() * gap : head.y() + dir.y() * gap;
+    QPointF delta = horizontal ? QPointF(target - nearSide, 0) : QPointF(0, target - nearSide);
+
+    QStringList copies;
+    edit("Continue reaction", [&](Document& d) {
+        copies = edits::continueReaction(d, mols, renderer_.toModel(tail), renderer_.toModel(head), renderer_.toModel(delta));
+    });
+    // Select the copy so the next Ctrl+arrow carries on from it.
+    selected_.clear();
+    for (const auto& c : copies) selected_.insert(c);
+    update();
+    emit infoTargetChanged();
+}
+
+void Canvas::moveFocus(QPointF dir) {
+    // To the bonded neighbour that lies most nearly in that direction (within about 70°).
+    const Molecule* m = doc_.moleculeOfAtom(stickyAtom_);
+    if (!m) return;
+    QPointF here = m->atom(stickyAtom_)->pos();
+    QString best;
+    double bestDot = 0.35;
+    for (const auto& nb : m->neighbors(stickyAtom_)) {
+        double dd = dot(unit(m->atom(nb)->pos() - here), dir);
+        if (dd > bestDot) { bestDot = dd; best = nb; }
+    }
+    if (best.isEmpty()) return;
+    stickyAtom_ = best;
+    updateHover(lastMouse_);
+    update();
+}
+
+bool Canvas::showsBondChanges(const QString& arrowId) const {
+    for (const auto& s : doc_.schemes)
+        for (const auto& st : s.steps)
+            if (st.arrow == arrowId) return st.showDiff;
+    return false;
+}
+
+void Canvas::toggleBondChanges(QStringList arrowIds) {
+    // No arrows given: every step.
+    Document probe = doc_;
+    edits::buildScheme(probe);
+    if (arrowIds.isEmpty())
+        for (const auto& s : probe.schemes) for (const auto& st : s.steps) arrowIds << st.arrow;
+    bool anyStep = false, turnOn = false;
+    for (const auto& s : probe.schemes)
+        for (const auto& st : s.steps)
+            if (arrowIds.contains(st.arrow)) { anyStep = true; turnOn |= !st.showDiff; }
+    if (!anyStep) {
+        emit status("That arrow has no reactant and product to compare: draw them behind its tail and past its head.");
+        return;
+    }
+    edit(turnOn ? "Show bond changes" : "Hide bond changes", [&](Document& d) {
+        edits::buildScheme(d);
+        for (auto& s : d.schemes)
+            for (auto& st : s.steps) {
+                if (!arrowIds.contains(st.arrow)) continue;
+                st.showDiff = turnOn;
+                if (!turnOn || st.manualMap) continue;
+                // Colouring needs a mapping: map the step automatically if none of its atoms are.
+                bool mapped = false;
+                for (const auto& id : st.reactants + st.products)
+                    if (const Molecule* m = d.molecule(id))
+                        for (const auto& a : m->atoms) mapped |= a.map != 0;
+                if (mapped) continue;
+                std::vector<Molecule*> rs, ps;
+                for (const auto& id : st.reactants) if (Molecule* m = d.molecule(id)) rs.push_back(m);
+                for (const auto& id : st.products) if (Molecule* m = d.molecule(id)) ps.push_back(m);
+                if (!rs.empty() && !ps.empty()) chem::autoMap(rs, ps);
+            }
+    });
+    emit status(turnOn ? "Bonds broken, formed and changed are coloured (Reaction → Arrow → Show Bond Changes to hide)."
+                       : "Bond changes hidden.");
 }
 
 void Canvas::command(const QString& id) {
+    static const QHash<QString, QPointF> continueDirs = {{"reaction.continueRight", {1, 0}}, {"reaction.continueLeft", {-1, 0}},
+                                                         {"reaction.continueUp", {0, -1}}, {"reaction.continueDown", {0, 1}}};
+    if (continueDirs.contains(id)) { continueReaction(continueDirs[id]); return; }
     // Acts on what's under the cursor (with the selection, if that's part of it), else on the selection.
     Hit h = mouseInside_ ? hover() : Hit{};
     QSet<QString> ids;
@@ -1710,6 +1928,8 @@ void Canvas::command(const QString& id) {
         if (!ok) emit status(QString("Hover over or select %1 first.").arg(what));
         return ok;
     };
+
+    if (id == "arrow.toggleDiff") { toggleBondChanges(arrows); return; }
 
     struct T { const char* id; double a, b, c, d; };
     static const T transforms[] = {{"structure.flipH", -1, 0, 0, 1}, {"structure.flipV", 1, 0, 0, -1},

@@ -136,10 +136,10 @@ QString addAtom(Document& d, QPointF pos, const QString& el) {
     return newAtom(d, m, pos, el).id;
 }
 
-QString growBond(Document& d, QString atomId, int order) {
+QString growBond(Document& d, QString atomId, int order, std::optional<QPointF> toward) {
     Molecule* m = d.moleculeOfAtom(atomId);
     if (!m) return {};
-    QPointF dir = newBondDirection(*m, atomId, order);
+    QPointF dir = newBondDirection(*m, atomId, order, toward);
     QPointF p = m->atom(atomId)->pos() + dir;
     return bondToPoint(d, atomId, p, order);
 }
@@ -215,11 +215,23 @@ QString addChain(Document& d, std::optional<QString> startAtom, QPointF start, Q
     return prev;
 }
 
-void attachRing(Document& d, QString atomId, int n, bool aromatic) {
+void attachRing(Document& d, QString atomId, int n, bool aromatic, std::optional<QPointF> toward) {
     Molecule* m = d.moleculeOfAtom(atomId);
     if (!m || n < 3) return;
+    // A chain end (or lone atom) becomes a ring atom. An atom already inside a chain gets the ring
+    // one bond away, as a substituent; a plain ring on a two-bond atom stays spiro, which is valid.
+    const int degree = int(m->neighbors(atomId).size());
+    QPointF dir;
+    if (degree >= 3 || (degree == 2 && aromatic)) {
+        QString from = atomId;
+        atomId = growBond(d, from, 1, toward);
+        m = d.moleculeOfAtom(atomId);
+        if (!m || atomId.isEmpty() || m->neighbors(atomId).size() != 1) return;  // ran into an existing atom
+        dir = unit(m->atom(atomId)->pos() - m->atom(from)->pos());
+    } else {
+        dir = degree == 0 ? QPointF(0, 1) : freeDirection(*m, atomId);
+    }
     QPointF a = m->atom(atomId)->pos();
-    QPointF dir = m->neighbors(atomId).isEmpty() ? QPointF(0, 1) : freeDirection(*m, atomId);
     double R = 1.0 / (2 * std::sin(M_PI / n));
     QPointF c = a + dir * R;
     std::vector<QPointF> pts;
@@ -228,6 +240,19 @@ void attachRing(Document& d, QString atomId, int n, bool aromatic) {
     QString keep = m->id;
     QStringList ring = buildRing(d, m, pts, {atomId});
     if (aromatic) kekulizeRing(*d.molecule(keep), ring);
+}
+
+QString attachGroup(Document& d, QString atomId, const QString& name, std::optional<QPointF> toward) {
+    Molecule* m = d.moleculeOfAtom(atomId);
+    if (!m) return {};
+    if (m->neighbors(atomId).size() >= 2) {
+        QString from = atomId;
+        atomId = growBond(d, from, 1, toward);
+        m = d.moleculeOfAtom(atomId);
+        if (!m || atomId.isEmpty() || m->neighbors(atomId).size() != 1) return {};  // ran into an existing atom
+    }
+    setLabel(d, atomId, name);
+    return atomId;
 }
 
 void fuseRing(Document& d, QString bondId, int n, bool aromatic) {
@@ -297,6 +322,49 @@ QStringList insertMolecules(Document& d, std::vector<Molecule> input, QPointF at
         ids << m.id;
         d.molecules.push_back(std::move(m));
     }
+    return ids;
+}
+
+QStringList continueReaction(Document& d, const QStringList& molIds, QPointF tail, QPointF head, QPointF delta) {
+    QStringList ids;
+    std::vector<Molecule> copies;
+    // Map every atom to its copy: unmapped originals get fresh map numbers, which the copy inherits.
+    // (Atoms already mapped keep theirs, so a chain of steps stays consistent.)
+    int maxMap = 0;
+    for (const auto& m : d.molecules) for (const auto& a : m.atoms) maxMap = std::max(maxMap, a.map);
+    for (const auto& mid : molIds)
+        if (Molecule* src = d.molecule(mid))
+            for (auto& a : src->atoms) if (a.map == 0) a.map = ++maxMap;
+    for (const auto& mid : molIds) {
+        const Molecule* src = d.molecule(mid);
+        if (!src) continue;
+        Molecule m = *src;
+        QHash<QString, QString> rename;
+        for (auto& a : m.atoms) rename[a.id] = d.newId("a");
+        m.renameAtoms(rename);
+        for (auto& b : m.bonds) b.id = d.newId("b");
+        m.id = d.newId("m");
+        // The product is a new compound: it gets its own number later, not a copy of this one.
+        m.number.clear();
+        m.numberManual = false;
+        m.caption.clear();
+        m.translate(delta);
+        ids << m.id;
+        copies.push_back(std::move(m));
+    }
+    if (ids.isEmpty()) return ids;
+    for (auto& m : copies) d.molecules.push_back(std::move(m));
+    Arrow a;
+    a.id = d.newId("r");
+    a.x1 = tail.x(); a.y1 = tail.y();
+    a.x2 = head.x(); a.y2 = head.y();
+    d.arrows.push_back(a);
+    // Register the step (read from the drawing, as Arrange does) and colour what changes as the copy
+    // is edited. The mapping is exact, so mark it as set by hand: nothing should redo it.
+    buildScheme(d);
+    for (auto& s : d.schemes)
+        for (auto& st : s.steps)
+            if (st.arrow == a.id) { st.showDiff = true; st.manualMap = true; }
     return ids;
 }
 

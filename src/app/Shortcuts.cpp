@@ -1,6 +1,9 @@
 #include "app/Shortcuts.h"
 
+#include "core/chem/Chem.h"
+#include "core/model/Labels.h"
 #include "editor/Canvas.h"
+#include "editor/Groups.h"
 #include "editor/Keymap.h"
 
 #include <QAction>
@@ -175,6 +178,7 @@ ShortcutsDialog::ShortcutsDialog(ShortcutRegistry& registry, Canvas* canvas, QWi
     auto* tabs = new QTabWidget;
     tabs->addTab(buildCommandsTab(), "Commands");
     tabs->addTab(buildHoverTab(), "Hover keys");
+    tabs->addTab(buildGroupsTab(), "Groups");
     lay->addWidget(tabs);
     auto* close = new QDialogButtonBox(QDialogButtonBox::Close);
     connect(close, &QDialogButtonBox::rejected, this, &QDialog::accept);
@@ -456,6 +460,110 @@ void ShortcutsDialog::fillHover() {
     }
     for (auto* g : groups) if (g->childCount() == 0) delete g;
     hoverTree_->expandAll();
+}
+
+QWidget* ShortcutsDialog::buildGroupsTab() {
+    auto* w = new QWidget;
+    auto* lay = new QVBoxLayout(w);
+    auto* intro = new QLabel(
+        "Your own groups, used like Ac or OMe: type the name as an atom label, or give it a hover key. "
+        "Write the SMILES with one * where it attaches (acetyl is *C(C)=O). On a chain end the key turns "
+        "that atom into the group; on an atom with two or more bonds it adds the group one bond away. "
+        "Files that use a custom group carry its definition, so they open correctly elsewhere.");
+    intro->setWordWrap(true);
+    lay->addWidget(intro);
+    groupTree_ = new QTreeWidget;
+    groupTree_->setColumnCount(3);
+    groupTree_->setHeaderLabels({"Name", "SMILES", "Key"});
+    groupTree_->setRootIsDecorated(false);
+    groupTree_->header()->setSectionResizeMode(1, QHeaderView::Stretch);
+    lay->addWidget(groupTree_, 1);
+
+    auto* form = new QHBoxLayout;
+    groupName_ = new QLineEdit;
+    groupName_->setPlaceholderText("Name, e.g. Tr");
+    groupName_->setMaximumWidth(120);
+    groupSmiles_ = new QLineEdit;
+    groupSmiles_->setPlaceholderText("SMILES with *, e.g. *C(c1ccccc1)(c1ccccc1)c1ccccc1");
+    groupKey_ = new KeyCapture;
+    groupKey_->setPlaceholderText("Key (optional)");
+    groupKey_->setMaximumWidth(150);
+    auto* save = new QPushButton("Save");
+    auto* remove = new QPushButton("Remove");
+    form->addWidget(groupName_);
+    form->addWidget(groupSmiles_, 1);
+    form->addWidget(groupKey_);
+    form->addWidget(save);
+    form->addWidget(remove);
+    lay->addLayout(form);
+    groupNote_ = new QLabel;
+    groupNote_->setWordWrap(true);
+    lay->addWidget(groupNote_);
+
+    connect(groupTree_, &QTreeWidget::currentItemChanged, this, [this](QTreeWidgetItem* it) {
+        if (!it) return;
+        groupName_->setText(it->text(0));
+        groupSmiles_->setText(it->text(1));
+        groupKey_->setText(it->text(2).section(',', 0, 0).trimmed());
+    });
+    connect(save, &QPushButton::clicked, this, [this] {
+        const QString name = groupName_->text().trimmed(), smi = groupSmiles_->text().trimmed();
+        QString problem = labels::checkGroup(name, smi);
+        QString err;
+        if (problem.isEmpty() && !chem::fromSmiles(smi, &err)) problem = "RDKit can't read that SMILES" + (err.isEmpty() ? "." : ": " + err);
+        if (!problem.isEmpty()) { groupNote_->setText(problem); return; }
+        auto groups = labels::customGroups();
+        groups[name] = smi;
+        if (!groups::save(groups)) { groupNote_->setText("Couldn't write " + groups::path()); return; }
+        // A key typed here binds the group on atoms and on empty canvas (replacing its old key).
+        const QString key = groupKey_->text().trimmed(), action = "group:" + name;
+        Keymap::Map m = canvas_->keymap().map();
+        for (const char* t : {"atom", "empty"}) {
+            for (const auto& k : m[t].keys()) if (m[t][k] == action) m[t].remove(k);
+            if (!key.isEmpty() && !key.contains(' ')) m[t][key] = action;
+        }
+        canvas_->keymap().setMap(m);
+        canvas_->keymap().save();
+        canvas_->groupsChanged();
+        groupNote_->setText(QString("Saved %1%2%3.")
+                                .arg(name, labels::isBuiltin(name) ? " (it replaces the built-in one)" : "",
+                                     key.isEmpty() || key.contains(' ') ? "" : ", on " + key));
+        fillGroups();
+        fillHover();
+    });
+    connect(remove, &QPushButton::clicked, this, [this] {
+        const QString name = groupName_->text().trimmed();
+        auto groups = labels::customGroups();
+        if (!groups.remove(name)) { groupNote_->setText("Pick one of your groups first."); return; }
+        groups::save(groups);
+        Keymap::Map m = canvas_->keymap().map();
+        for (const char* t : {"atom", "empty"})
+            for (const auto& k : m[t].keys()) if (m[t][k] == "group:" + name && !labels::isBuiltin(name)) m[t].remove(k);
+        canvas_->keymap().setMap(m);
+        canvas_->keymap().save();
+        canvas_->groupsChanged();
+        groupNote_->setText("Removed " + name + ".");
+        groupName_->clear();
+        groupSmiles_->clear();
+        groupKey_->clear();
+        fillGroups();
+        fillHover();
+    });
+    fillGroups();
+    return w;
+}
+
+void ShortcutsDialog::fillGroups() {
+    groupTree_->clear();
+    const auto atomKeys = canvas_->keymap().map().value("atom");
+    const auto groups = labels::customGroups();
+    for (auto it = groups.begin(); it != groups.end(); ++it) {
+        QStringList keys;
+        for (auto k = atomKeys.begin(); k != atomKeys.end(); ++k) if (k.value() == "group:" + it.key()) keys << k.key();
+        keys.sort();
+        new QTreeWidgetItem(groupTree_, {it.key(), it.value(), keys.join(", ")});
+    }
+    if (groups.isEmpty()) groupNote_->setText("No custom groups yet. Built-in ones (Ac, Boc, TBS…) are under Hover keys.");
 }
 
 void ShortcutsDialog::setHover(const QString& key, bool add) {

@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ChemFox | trevfox.dev</title>
 <meta name="description" content="ChemFox: a keyboard-first editor for chemical structures and reaction schemes. Free, offline, Windows and macOS.">
-<link rel="icon" href="assets/icon.png">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon.png" type="image/png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600&family=PT+Mono&family=Rubik:ital,wght@0,300..700;1,400&display=swap" rel="stylesheet">
@@ -16,7 +18,7 @@
 <style>
   /* Tokens taken from trevfox.dev */
   :root {
-    --bg: #faf5ff; --text: #424242; --accent: #a682ff; --code-bg: #ede4fb; --muted: #6b6b6b;
+    --bg: #fff8f3; --text: #424242; --accent: #f06e1e; --code-bg: #fde8d9; --muted: #6b6b6b;
     --sans: "Rubik", ui-sans-serif, system-ui, sans-serif;
     --nav: "JetBrains Mono", ui-monospace, monospace;
     --mono: "PT Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -50,7 +52,7 @@
   .divider span { white-space: nowrap; }
   .divider i { height: 2px; flex: 1; background: var(--text); }
 
-  /* Entries: purple bar on the left, accent title, meta line (the blog's post previews) */
+  /* Entries: accent bar on the left, accent title, meta line (the blog's post previews) */
   .entry { display: flex; gap: 12px; margin-bottom: 20px; }
   .entry::before { content: ""; width: 4px; border-radius: 4px; background: var(--accent); flex: none; }
   .entry h3 { margin: 0; font-size: 20px; font-weight: 500; }
@@ -166,7 +168,7 @@
 </main>
 
 <footer>
-  Trevor Fox / ChemFox · Apache-2.0 / <a id="src" href="#">source</a> / <a href="https://trevfox.dev">trevfox.dev</a>
+  Trevor Fox / ChemFox · Apache-2.0 / <a id="src" href="#">source</a> / <a href="press/chemfox-press-kit.zip" download>press kit</a> / <a href="https://trevfox.dev">trevfox.dev</a>
 </footer>
 
 <script>

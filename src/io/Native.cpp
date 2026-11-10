@@ -1,6 +1,7 @@
 #include "io/Native.h"
 
 #include "core/chem/Chem.h"
+#include "core/model/Labels.h"
 #include "io/Export.h"
 
 #include <QFile>
@@ -146,6 +147,16 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
     codes.sort();
     inst.sort();
     root["warnings"] = QJsonObject{{"suppressed", strings(codes)}, {"suppressedInstances", strings(inst)}};
+    // Custom groups used here travel with the file, so it means the same on another computer.
+    QJsonObject groups;
+    const auto custom = labels::customGroups(), fromFiles = labels::documentGroups();
+    for (const auto& m : d.molecules)
+        for (const auto& a : m.atoms) {
+            if (a.label.isEmpty()) continue;
+            QString name = labels::canonical(a.label);
+            if (custom.contains(name) || fromFiles.contains(name)) groups[name] = labels::fragmentSmiles(name);
+        }
+    if (!groups.isEmpty()) root["groups"] = groups;
     return root;
 }
 
@@ -160,6 +171,12 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
         return std::nullopt;
     }
     if (!migrate(o, error)) return std::nullopt;
+    // Groups defined in the file fill in names this computer doesn't know (the user's own win).
+    QMap<QString, QString> groups;
+    const QJsonObject go = o.value("groups").toObject();
+    for (auto it = go.begin(); it != go.end(); ++it)
+        if (labels::checkGroup(it.key(), it.value().toString()).isEmpty()) groups[it.key()] = it.value().toString();
+    labels::addFileGroups(groups);
     Document d;
     d.styleName = o.value("style").toString("default");
     d.styleText = o.value("styleText").toString();
