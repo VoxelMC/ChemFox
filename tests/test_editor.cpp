@@ -602,3 +602,13 @@ TEST_CASE("E expands and collapses labels; focus moves with arrow keys and start
     d.key(Qt::Key_1, "1");
     CHECK(d.mol().neighbors(c0).size() == 2);
 }
+TEST_CASE("keymap: keys for an action, shortest first, follow rebinding") {
+    Keymap k;
+    CHECK(k.keysFor("any", "tool:select") == QStringList{"V"});
+    CHECK(k.keysFor("any", "tool:arrow") == QStringList{"Shift+A"});
+    Keymap::Map m = k.map();
+    m["any"]["Shift+S"] = "tool:select";
+    k.setMap(m);
+    CHECK(k.keysFor("any", "tool:select") == QStringList{"V", "Shift+S"});
+    CHECK(k.keysFor("any", "nothing").isEmpty());
+}

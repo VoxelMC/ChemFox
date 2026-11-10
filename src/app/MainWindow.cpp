@@ -69,6 +69,30 @@ QString richFormula(const QString& f) {
 }
 
 // Simple line icons drawn in the palette's text colour, so they suit light and dark themes.
+// A tool icon with its hover key in the bottom-right corner ("V", "⇧A"), on a small chip so it reads over
+// the drawing. An empty key gives the plain icon.
+QIcon keyBadge(const QIcon& base, QString key, const QColor& ink, const QColor& bg) {
+    if (key.isEmpty()) return base;
+    key.replace("Shift+", QString::fromUtf8("⇧"));
+    QPixmap pm = base.pixmap(48, 48);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    QFont f("Arial");
+    f.setPixelSize(key.size() > 1 ? 26 : 30);  // drawn at 2x: about 13-15 px on screen
+    f.setBold(true);
+    p.setFont(f);
+    QRectF r = QFontMetricsF(f).tightBoundingRect(key).adjusted(-4, -4, 4, 4);
+    r.moveBottomRight(QPointF(48, 48));
+    QColor chip = bg;
+    chip.setAlpha(230);
+    p.setPen(Qt::NoPen);
+    p.setBrush(chip);
+    p.drawRoundedRect(r, 4, 4);
+    p.setPen(ink);
+    p.drawText(r, Qt::AlignCenter, key);
+    return QIcon(pm);
+}
+
 QIcon toolIcon(const QString& kind, const QColor& ink) {
     QPixmap pm(48, 48);
     pm.fill(Qt::transparent);
@@ -198,6 +222,7 @@ void MainWindow::buildMenus() {
     edit->addAction("&Keyboard Shortcuts…", QKeySequence("Ctrl+Alt+K"), this, [this] {
         ShortcutsDialog dlg(shortcuts_, canvas_, this);
         dlg.exec();
+        if (refreshToolKeys_) refreshToolKeys_();  // tool keys may have been rebound
     });
 
     auto* structure = menuBar()->addMenu("&Structure");
@@ -324,20 +349,19 @@ void MainWindow::buildMenus() {
     menuBar()->insertMenu(help->menuAction(), toolMenu);
     auto* group = new QActionGroup(this);
     const QColor ink = palette().color(QPalette::WindowText);
-    struct ToolDef { const char* label; const char* icon; Canvas::Tool tool; const char* tip; };
-    const ToolDef defs[] = {
-        {"Select", "select", Canvas::Tool::Select, "Drag on empty canvas to select (box)"},
-        {"Chain", "chain", Canvas::Tool::Chain, "Drag on empty canvas to draw a zig-zag chain"},
-        {"Arrow", "arrow", Canvas::Tool::Arrow, "Drag to draw a reaction arrow (15° steps; Alt: free)"},
-        {"Bent", "bent", Canvas::Tool::BentArrow,
+    struct ToolDef { const char* label; const char* icon; Canvas::Tool tool; const char* action; const char* tip; };
+    static const ToolDef defs[] = {
+        {"Select", "select", Canvas::Tool::Select, "tool:select", "Drag on empty canvas to select (box)"},
+        {"Chain", "chain", Canvas::Tool::Chain, "tool:chain", "Drag on empty canvas to draw a zig-zag chain"},
+        {"Arrow", "arrow", Canvas::Tool::Arrow, "tool:arrow", "Drag to draw a reaction arrow (15° steps; Alt: free)"},
+        {"Bent", "bent", Canvas::Tool::BentArrow, "tool:bent",
          "Click each corner of a bent arrow; double-click or Enter to finish, Esc to cancel"},
-        {"Text", "text", Canvas::Tool::Text, "Click to add text (**bold**, *italic*)"},
+        {"Text", "text", Canvas::Tool::Text, "tool:text", "Click to add text (**bold**, *italic*)"},
     };
     QList<QAction*> toolActions;
     for (const auto& t : defs) {
         QAction* a = tools->addAction(toolIcon(t.icon, ink), t.label);
         a->setCheckable(true);
-        a->setToolTip(QString("%1 — %2").arg(t.label, t.tip));
         a->setStatusTip(t.tip);
         group->addAction(a);
         toolMenu->addAction(a);
@@ -345,6 +369,24 @@ void MainWindow::buildMenus() {
         connect(a, &QAction::triggered, canvas_, [this, tool] { canvas_->setTool(tool); });
         toolActions << a;
     }
+    // Show each tool's hover key: a badge on the toolbar icon, the shortcut column in the Tools menu and the
+    // tooltip. Display only: a real menu shortcut would take plain letters away from the canvas and text boxes.
+    // Refreshed when keys are rebound.
+    refreshToolKeys_ = [this, toolActions, ink] {
+        const QColor bg = palette().color(QPalette::Window);
+        for (int i = 0; i < toolActions.size(); ++i) {
+            const ToolDef& t = defs[i];
+            const QStringList keys = canvas_->keymap().keysFor("any", t.action);
+            const QString key = keys.value(0);
+            QAction* a = toolActions[i];
+            a->setIcon(keyBadge(toolIcon(t.icon, ink), key, ink, bg));
+            a->setText(key.isEmpty() ? QString(t.label) : QString("%1\t%2").arg(t.label, key));
+            a->setIconText(t.label);
+            a->setToolTip(key.isEmpty() ? QString("%1 — %2").arg(t.label, t.tip)
+                                        : QString("%1 (%2) — %3").arg(t.label, key, t.tip));
+        }
+    };
+    refreshToolKeys_();
     toolActions.front()->setChecked(true);
     connect(canvas_, &Canvas::toolChanged, this, [toolActions](int t) { toolActions[t]->setChecked(true); });
     tools->addSeparator();

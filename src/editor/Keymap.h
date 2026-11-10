@@ -29,6 +29,8 @@ public:
 
     // Action for a key on a target, falling back to the "any" table.
     QString action(const QString& target, const QString& key) const;
+    // The keys bound to an action on a target, shortest first ("V" before "Shift+V"); empty if unbound.
+    QStringList keysFor(const QString& target, const QString& action) const;
 
     // Canonical key name for an event ("C", "Shift+6", "+", "Enter"); empty for shortcuts.
     static QString keyName(const QKeyEvent* e);
