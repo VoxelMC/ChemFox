@@ -113,6 +113,44 @@ Molecule* Document::moleculeOfBond(const QString& bondId) {
     for (auto& m : molecules) if (m.bond(bondId)) return &m;
     return nullptr;
 }
+const Molecule* Document::moleculeOfBond(const QString& bondId) const {
+    for (auto& m : molecules) if (m.bond(bondId)) return &m;
+    return nullptr;
+}
+CurvedArrow* Document::curvedArrow(const QString& id) {
+    for (auto& c : curved) if (c.id == id) return &c;
+    return nullptr;
+}
+const CurvedArrow* Document::curvedArrow(const QString& id) const {
+    for (auto& c : curved) if (c.id == id) return &c;
+    return nullptr;
+}
+
+bool Document::resolve(const CurvedEnd& e, QPointF* pos) const {
+    if (!e.atom.isEmpty()) {
+        const Molecule* m = moleculeOfAtom(e.atom);
+        if (!m) return false;
+        if (pos) *pos = m->atom(e.atom)->pos();
+        return true;
+    }
+    if (!e.bond.isEmpty()) {
+        const Molecule* m = moleculeOfBond(e.bond);
+        if (!m) return false;
+        const Bond* b = m->bond(e.bond);
+        if (pos) *pos = (m->atom(b->a)->pos() + m->atom(b->b)->pos()) / 2;
+        return true;
+    }
+    if (pos) *pos = e.pos();
+    return true;
+}
+
+void Document::pruneCurved() {
+    if (curved.empty()) return;
+    curved.erase(std::remove_if(curved.begin(), curved.end(),
+                                [&](const CurvedArrow& c) { return !resolve(c.from, nullptr) || !resolve(c.to, nullptr); }),
+                 curved.end());
+}
+
 Arrow* Document::arrow(const QString& id) {
     for (auto& a : arrows) if (a.id == id) return &a;
     return nullptr;
@@ -158,6 +196,7 @@ void Document::fixNextId() {
     }
     for (auto& a : arrows) see(a.id);
     for (auto& t : texts) see(t.id);
+    for (auto& c : curved) see(c.id);
     for (auto& s : schemes) see(s.id);
     nextId = std::max(nextId, mx + 1);
 }

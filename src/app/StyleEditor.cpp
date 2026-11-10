@@ -171,6 +171,13 @@ void StyleEditor::buildFields() {
     add("Arrows", "arrows", "color", "Colour", K::Color, [](const Style& s) { return s.arrowColor; },
         "Arrow colour (an arrow's own colour overrides it)");
 
+    add("Arrows", "mechanism", "width", "Curved arrows: line width", K::Length, [](const Style& s) { return s.mechanismWidth(); },
+        "Width of mechanism (electron-pushing) arrows; the reaction arrows' width unless set");
+    add("Arrows", "mechanism", "head length", "Curved arrows: head length", K::Length, [](const Style& s) { return s.mechanismHeadLength(); }, "");
+    add("Arrows", "mechanism", "head width", "Curved arrows: head width", K::Length, [](const Style& s) { return s.mechanismHeadWidth(); }, "");
+    add("Arrows", "mechanism", "color", "Curved arrows: colour", K::Color, [](const Style& s) { return s.mechanismColor(); },
+        "Colour of mechanism arrows (the arrow colour unless set; an arrow's own colour overrides it)");
+
     add("Conditions", "annotations", "font", "Font", K::Font, [](const Style& s) { return s.annotationFont; },
         "Font for the text above and below arrows, and captions");
     add("Conditions", "annotations", "size", "Size", K::Length, [](const Style& s) { return s.annotationSize; }, "");

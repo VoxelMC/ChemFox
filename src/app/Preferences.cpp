@@ -144,7 +144,8 @@ QWidget* PreferencesDialog::generalTab() {
 
     auto* tool = new QComboBox;
     const QList<QPair<QString, QString>> tools = {{"Select", "select"}, {"Chain", "chain"}, {"Arrow", "arrow"},
-                                                  {"Bent arrow", "bent"}, {"Text", "text"}};
+                                                  {"Bent arrow", "bent"}, {"Text", "text"},
+                                                  {"Mechanism arrow", "mechanism"}};
     for (const auto& t : tools) tool->addItem(t.first, t.second);
     tool->setCurrentIndex(std::max(0, tool->findData(QSettings().value(prefs::kStartTool, "select").toString())));
     connect(tool, &QComboBox::currentIndexChanged, this, [tool](int) { QSettings().setValue(prefs::kStartTool, tool->currentData()); });

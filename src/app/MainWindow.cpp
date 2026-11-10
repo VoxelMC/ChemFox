@@ -37,6 +37,7 @@
 #include <QStandardPaths>
 #include <QMenu>
 #include <QMenuBar>
+#include <QPainterPath>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
@@ -125,6 +126,12 @@ QIcon toolIcon(const QString& kind, const QColor& ink) {
     } else if (kind == "bent") {
         p.drawPolyline(QPolygonF({QPointF(8, 8), QPointF(8, 30), QPointF(34, 30)}));
         head(QPointF(43, 30), QPointF(1, 0));
+    } else if (kind == "mechanism") {
+        QPainterPath arc;
+        arc.moveTo(8, 36);
+        arc.quadTo(20, 4, 38, 24);
+        p.drawPath(arc);
+        head(QPointF(42, 31), QPointF(0.5, 0.87));
     } else if (kind == "text") {
         QFont f("Arial");
         f.setPixelSize(34);
@@ -193,7 +200,7 @@ MainWindow::MainWindow() {
         // Preferences → General: the tool selected at startup.
         static const QHash<QString, Canvas::Tool> tools = {{"select", Canvas::Tool::Select}, {"chain", Canvas::Tool::Chain},
                                                            {"arrow", Canvas::Tool::Arrow}, {"bent", Canvas::Tool::BentArrow},
-                                                           {"text", Canvas::Tool::Text}};
+                                                           {"text", Canvas::Tool::Text}, {"mechanism", Canvas::Tool::Mechanism}};
         canvas_->setTool(tools.value(s.value(prefs::kStartTool, "select").toString(), Canvas::Tool::Select));
     }
     updateTitle();
@@ -244,6 +251,21 @@ void MainWindow::buildMenus() {
         ->setStatusTip("Copy the hovered object or the selection, offset a little");
     edit->addAction("Bring to &Front", QKeySequence("Ctrl+Shift+]"), canvas_, [this] { canvas_->restackSelection(true); });
     edit->addAction("Send to &Back", QKeySequence("Ctrl+Shift+["), canvas_, [this] { canvas_->restackSelection(false); });
+    {
+        auto* al = edit->addMenu("A&lign and Distribute");
+        struct A { const char* text; const char* id; snap::Align mode; };
+        static const A aligns[] = {
+            {"Align Left", "align.left", snap::Align::Left}, {"Align Centre", "align.center", snap::Align::HCenter},
+            {"Align Right", "align.right", snap::Align::Right}, {"Align Top", "align.top", snap::Align::Top},
+            {"Align Middle", "align.middle", snap::Align::VCenter}, {"Align Bottom", "align.bottom", snap::Align::Bottom},
+            {"Distribute Horizontally", "align.distributeH", snap::Align::DistributeH},
+            {"Distribute Vertically", "align.distributeV", snap::Align::DistributeV}};
+        for (int i = 0; i < 8; ++i) {
+            if (i == 3 || i == 6) al->addSeparator();
+            const snap::Align mode = aligns[i].mode;
+            al->addAction(aligns[i].text, this, [this, mode] { canvas_->alignSelection(mode); })->setObjectName(aligns[i].id);
+        }
+    }
     auto* copyAs = edit->addMenu("Copy &As");
     // Commands that act on the hovered structure or arrow, else the selection.
     auto cmd = [this](QMenu* m, const QString& text, const QString& id) {
@@ -271,6 +293,7 @@ void MainWindow::buildMenus() {
     cmd(transform, "Rotate 90° Clockwise", "structure.rotateCW");
     cmd(transform, "Rotate 90° Counter-clockwise", "structure.rotateCCW");
     cmd(transform, "Rotate 180°", "structure.rotate180");
+    transform->addAction("Rotate Freely… (Shift+R over it)", canvas_, &Canvas::startRotate)->setObjectName("structure.rotateFree");
     cmd(structure, "Align to Reactant / Product", "structure.align");
     structure->addSeparator();
     cmd(structure, "Show Stereo Labels (R/S, E/Z)", "structure.toggleStereo");
@@ -405,6 +428,8 @@ void MainWindow::buildMenus() {
         {"Bent", "bent", Canvas::Tool::BentArrow, "tool:bent",
          "Click each corner of a bent arrow; double-click or Enter to finish, Esc to cancel"},
         {"Text", "text", Canvas::Tool::Text, "tool:text", "Click to add text (**bold**, *italic*)"},
+        {"Curved", "mechanism", Canvas::Tool::Mechanism, "tool:mechanism",
+         "Mechanism arrows: drag from an atom, lone pair or bond to where the electrons go (Shift: fishhook)"},
     };
     QList<QAction*> toolActions;
     for (const auto& t : defs) {
@@ -947,11 +972,16 @@ void MainWindow::showKeyReference() {
 <tr><td>Bond</td><td>w / h / y</td><td>Wedge / hash / wavy (again: reverse)</td></tr>
 <tr><td>Bond</td><td>f</td><td>Flip wedge direction or double-bond side</td></tr>
 <tr><td>Bond</td><td>Shift+3…8</td><td>Fuse a ring of that size</td></tr>
+<tr><td>Atom / bond</td><td>m / Shift+M</td><td>Start a mechanism arrow / fishhook here; m again on its target finishes it</td></tr>
+<tr><td>Atom</td><td>Shift+L</td><td>Lone pairs: all the atom has, then one fewer each press, then none</td></tr>
+<tr><td>Atom</td><td>Double-click</td><td>Focus the atom: keys then add to it</td></tr>
 <tr><td>Arrow</td><td>Enter / k</td><td>Edit conditions / cycle arrow kind</td></tr>
+<tr><td>Mechanism arrow</td><td>k / f</td><td>Electron pair ↔ single electron / curve the other way</td></tr>
 <tr><td>Empty</td><td>C N O … / Shift+3…8 / r</td><td>New atom / ring / benzene at cursor</td></tr>
 <tr><td>Empty</td><td>a / t</td><td>New arrow / text</td></tr>
 <tr><td>Any</td><td>Delete</td><td>Remove hovered object</td></tr>
 <tr><td>Any</td><td>Tab</td><td>Cycle between overlapping hover targets</td></tr>
+<tr><td>Any</td><td>Shift+R</td><td>Rotate with a handle (15° steps)</td></tr>
 <tr><td>Global</td><td>Ctrl+Z / Ctrl+Shift+Z</td><td>Undo / redo</td></tr>
 <tr><td>Global</td><td>Ctrl+L</td><td>Clean structure (RDKit 2D layout)</td></tr>
 <tr><td>Global</td><td>Ctrl+Shift+A / Ctrl+Shift+N</td><td>Arrange scheme / number compounds</td></tr>
@@ -963,7 +993,8 @@ void MainWindow::showKeyReference() {
 <p>Drag from an atom → new bond (30° steps, fixed length); keep dragging → chain.<br>
 Drag on empty canvas → zig-zag chain. Hold Alt → no snapping.<br>
 Click → select molecule (Shift adds, Alt: single atom). Shift+drag → box select.<br>
-Drag a bond, or Ctrl+drag anything → move. Wheel → zoom. Middle/right drag or Space+drag → pan.</p>
+Drag a bond, or Ctrl+drag anything → move; hold Shift while moving for snap guides; Alt+drag → move a copy.<br>
+Wheel → zoom. Middle/right drag or Space+drag → pan.</p>
 <p>Every key and command is rebindable in <i>Edit → Keyboard Shortcuts</i> (Ctrl+Alt+K).</p>)";
     QDialog dlg(this);
     dlg.setWindowTitle("Keyboard Reference");

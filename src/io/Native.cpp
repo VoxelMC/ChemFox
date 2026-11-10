@@ -50,9 +50,30 @@ QStringList strings(const QJsonValue& v) {
 }
 double round4(double x) { return std::round(x * 10000.0) / 10000.0; }
 
-// Migrations: index i upgrades version i+1 to i+2. Version 1 is current, so none yet.
+QJsonObject curvedEnd(const CurvedEnd& e) {
+    if (!e.atom.isEmpty()) {
+        QJsonObject o{{"atom", e.atom}};
+        if (e.lonePair) o["lonePair"] = true;
+        return o;
+    }
+    if (!e.bond.isEmpty()) return QJsonObject{{"bond", e.bond}};
+    return QJsonObject{{"x", round4(e.x)}, {"y", round4(e.y)}};
+}
+CurvedEnd curvedEndFrom(const QJsonObject& o) {
+    CurvedEnd e;
+    e.atom = o.value("atom").toString();
+    e.bond = e.atom.isEmpty() ? o.value("bond").toString() : QString();
+    e.lonePair = !e.atom.isEmpty() && o.value("lonePair").toBool();
+    e.x = o.value("x").toDouble();
+    e.y = o.value("y").toDouble();
+    return e;
+}
+
+// Migrations: index i upgrades version i+1 to i+2.
 const std::vector<std::function<void(QJsonObject&)>>& migrations() {
-    static const std::vector<std::function<void(QJsonObject&)>> m = {};
+    static const std::vector<std::function<void(QJsonObject&)>> m = {
+        [](QJsonObject&) {},  // 1 -> 2: mechanism arrows and lone pairs were added; nothing to convert
+    };
     return m;
 }
 
@@ -73,6 +94,7 @@ bool migrate(QJsonObject& o, QString* error) {
 
 QJsonObject toJsonObject(const Document& d, bool withSmiles) {
     QJsonArray objects;
+    bool needsV2 = !d.curved.empty();
     for (const auto& m : d.molecules) {
         QJsonObject mo{{"id", m.id}, {"type", "molecule"}};
         if (!m.number.isEmpty()) mo["number"] = m.number;
@@ -89,6 +111,7 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
             if (a.radical) ao["radical"] = a.radical;
             if (a.map) ao["map"] = a.map;
             if (a.isotope) ao["isotope"] = a.isotope;
+            if (a.lonePairs) { ao["lonePairs"] = a.lonePairs; needsV2 = true; }
             atoms.append(ao);
         }
         for (const auto& b : m.bonds) {
@@ -120,6 +143,7 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
         if (a.bothHeads) ao["bothHeads"] = true;
         if (!a.line.isEmpty()) ao["line"] = a.line;
         if (a.widthScale != 1.0) ao["widthScale"] = a.widthScale;
+        if (a.hideLetter) ao["hideLetter"] = true;
         objects.append(ao);
     }
     for (const auto& t : d.texts) {
@@ -129,6 +153,17 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
         if (!t.align.isEmpty()) to["align"] = t.align;
         objects.append(to);
     }
+    for (const auto& c : d.curved) {
+        QJsonObject co{{"id", c.id}, {"type", "mechanism"}, {"from", curvedEnd(c.from)}, {"to", curvedEnd(c.to)}};
+        if (c.half) co["head"] = "half";
+        if (c.manual) co["bulge"] = round4(c.bulge);
+        if (c.shaped) {
+            auto pt = [](QPointF p) { return QJsonArray{round4(p.x()), round4(p.y())}; };
+            co["shape"] = QJsonObject{{"from", pt(c.fromOff)}, {"to", pt(c.toOff)}, {"c1", pt(c.c1)}, {"c2", pt(c.c2)}};
+        }
+        if (!c.color.isEmpty()) co["color"] = c.color;
+        objects.append(co);
+    }
     for (const auto& s : d.schemes) {
         QJsonArray steps;
         for (const auto& st : s.steps) {
@@ -136,12 +171,13 @@ QJsonObject toJsonObject(const Document& d, bool withSmiles) {
             if (!st.agents.isEmpty()) so["agents"] = strings(st.agents);
             if (st.showDiff) so["diff"] = true;
             if (st.manualMap) so["manualMap"] = true;
+            if (!st.noPlus.isEmpty()) so["noPlus"] = strings(st.noPlus);
             steps.append(so);
         }
         objects.append(QJsonObject{{"id", s.id}, {"type", "scheme"}, {"steps", steps}});
     }
 
-    QJsonObject root{{"format", "chemfox"}, {"version", kFormatVersion}, {"style", d.styleName}, {"objects", objects}};
+    QJsonObject root{{"format", "chemfox"}, {"version", needsV2 ? kFormatVersion : 1}, {"style", d.styleName}, {"objects", objects}};
     if (!d.styleText.isEmpty()) root["styleText"] = d.styleText;
     if (d.stepLetters) root["stepLetters"] = true;
     if (d.showMaps) root["showMaps"] = true;
@@ -213,6 +249,7 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
                 a.label = ao.value("label").toString();
                 a.map = ao.value("map").toInt();
                 a.isotope = ao.value("isotope").toInt();
+                a.lonePairs = std::clamp(ao.value("lonePairs").toInt(), 0, 4);  // checked against the chemistry below
                 m.atoms.push_back(a);
             }
             for (const auto& bv : ob.value("bonds").toArray()) {
@@ -281,6 +318,7 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
             a.bothHeads = ob.value("bothHeads").toBool();
             a.line = ob.value("line").toString();
             a.widthScale = ob.value("widthScale").toDouble(1.0);
+            a.hideLetter = ob.value("hideLetter").toBool();
             for (const auto& v : ob.value("via").toArray()) {
                 QJsonArray p = v.toArray();
                 a.via.emplace_back(p.at(0).toDouble(), p.at(1).toDouble());
@@ -296,6 +334,26 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
             t.color = ob.value("color").toString();
             t.align = ob.value("align").toString();
             d.texts.push_back(t);
+        } else if (type == "mechanism") {
+            CurvedArrow c;
+            c.id = ob.value("id").toString();
+            c.from = curvedEndFrom(ob.value("from").toObject());
+            c.to = curvedEndFrom(ob.value("to").toObject());
+            c.to.lonePair = false;
+            c.half = ob.value("head").toString() == "half";
+            c.manual = ob.contains("bulge");
+            c.bulge = ob.value("bulge").toDouble();
+            c.color = ob.value("color").toString();
+            if (ob.contains("shape")) {
+                const QJsonObject sh = ob.value("shape").toObject();
+                auto pt = [&](const char* k) { QJsonArray a = sh.value(k).toArray(); return QPointF(a.at(0).toDouble(), a.at(1).toDouble()); };
+                c.shaped = true;
+                c.fromOff = pt("from");
+                c.toOff = pt("to");
+                c.c1 = pt("c1");
+                c.c2 = pt("c2");
+            }
+            d.curved.push_back(c);
         } else if (type == "scheme") {
             Scheme s;
             s.id = ob.value("id").toString();
@@ -308,12 +366,18 @@ std::optional<Document> fromJsonObject(QJsonObject o, QString* error) {
                 st.products = strings(so.value("products"));
                 st.showDiff = so.value("diff").toBool();
                 st.manualMap = so.value("manualMap").toBool();
+                st.noPlus = strings(so.value("noPlus"));
                 s.steps.push_back(st);
             }
             d.schemes.push_back(s);
         }
     }
     d.pruneSchemes();
+    d.pruneCurved();  // arrows whose atom or bond isn't in the file
+    chem::capLonePairs(d);  // no more lone pairs than an atom really has
+    for (auto& c : d.curved)
+        if (c.from.lonePair)
+            if (const Molecule* m = d.moleculeOfAtom(c.from.atom); m && m->atom(c.from.atom)->lonePairs == 0) c.from.lonePair = false;
     d.fixNextId();
     return d;
 }
