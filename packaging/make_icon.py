@@ -37,6 +37,9 @@ TILES = {
 TILE = "flat"
 
 TILE_INSET, TILE_RADIUS = 40, 210  # rounded square inside the S x S canvas
+# macOS draws every app icon on Apple's grid: an 824-unit rounded square centred in the 1024 canvas. A tile that
+# fills the canvas looks oversized in the Dock and Finder, so the .icns uses this smaller tile.
+MAC_INSET, MAC_RADIUS = 100, 185
 
 
 def geometry():
@@ -80,9 +83,10 @@ def rgb(hexcolour, alpha=255):
 
 # --- raster -----------------------------------------------------------------------------------
 
-def render(size, tile=None, fox=WHITE, nose=ORANGE, gradient=None, crop=None):
+def render(size, tile=None, fox=WHITE, nose=ORANGE, gradient=None, crop=None, inset=TILE_INSET, radius=TILE_RADIUS):
     """A PNG of the logo. tile: tile colour or None (transparent); nose: colour or None to cut it
-    out. crop: a design-unit box (x, y, w, h) to frame instead of the whole tile."""
+    out. crop: a design-unit box (x, y, w, h) to frame instead of the whole tile. inset, radius: the
+    tile's margin and corner radius; the fox shrinks with the tile so it keeps its place on it."""
     ss = 4  # supersample for smooth edges
     box = crop or (0, 0, S, S)
     scale = size * ss / max(box[2], box[3])
@@ -98,11 +102,15 @@ def render(size, tile=None, fox=WHITE, nose=ORANGE, gradient=None, crop=None):
             t = y / max(H - 1, 1)
             fd.line([(0, y), (W, y)], fill=tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(4)))
         mask = Image.new("L", (W, H), 0)
-        x0, y0 = tx((TILE_INSET, TILE_INSET))
-        x1, y1 = tx((S - TILE_INSET, S - TILE_INSET))
-        ImageDraw.Draw(mask).rounded_rectangle([x0, y0, x1, y1], radius=TILE_RADIUS * scale, fill=255)
+        x0, y0 = tx((inset, inset))
+        x1, y1 = tx((S - inset, S - inset))
+        ImageDraw.Draw(mask).rounded_rectangle([x0, y0, x1, y1], radius=radius * scale, fill=255)
         img.paste(fill, (0, 0), mask)
     outline, nosepts = geometry()
+    if inset != TILE_INSET:
+        k, c = (S - 2 * inset) / (S - 2 * TILE_INSET), S / 2
+        shrink = lambda poly: [(c + (x - c) * k, c + (y - c) * k) for x, y in poly]
+        outline, nosepts = shrink(outline), shrink(nosepts)
     # Draw the fox on its own layer so a cut-out nose shows whatever is behind it.
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     ld = ImageDraw.Draw(layer)
@@ -148,7 +156,9 @@ def app_icons():
     big = render(1024, tile=TILES[TILE][0], nose=TILES[TILE][1] if not grad else ORANGE, gradient=grad)
     big.resize((512, 512), Image.LANCZOS).save(os.path.join(ICONS, "chemfox.png"))
     big.save(os.path.join(ICONS, "chemfox.ico"), sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)])
-    big.save(os.path.join(ICONS, "chemfox.icns"))
+    mac = render(1024, tile=TILES[TILE][0], nose=TILES[TILE][1] if not grad else ORANGE, gradient=grad,
+                 inset=MAC_INSET, radius=MAC_RADIUS)
+    mac.save(os.path.join(ICONS, "chemfox.icns"))
     os.makedirs(ASSETS, exist_ok=True)
     big.resize((512, 512), Image.LANCZOS).save(os.path.join(ASSETS, "icon.png"))
     big.resize((180, 180), Image.LANCZOS).save(os.path.join(ASSETS, "apple-touch-icon.png"))
