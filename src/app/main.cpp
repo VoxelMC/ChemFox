@@ -123,7 +123,10 @@ int main(int argc, char** argv) {
     QApplication::setOrganizationName("ChemFox");
     QApplication::setApplicationName("ChemFox");
     QApplication::setApplicationVersion(CHEMFOX_VERSION);
+#ifndef Q_OS_MACOS
+    // On macOS this would also replace the Dock icon with the PNG; the bundle's .icns is drawn to Apple's grid.
     QApplication::setWindowIcon(QIcon(":/icons/chemfox.png"));
+#endif
     migrateFromChemdoc();
     cd::groups::load();  // custom groups, before anything reads a label
 
