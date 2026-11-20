@@ -10,6 +10,10 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+### Added
+- File → Open Recent: the last ten documents opened or saved, newest first, with their folders so files of the same
+  name are easy to tell apart. Moved or deleted files drop off the list, and Clear Menu empties it (#15).
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

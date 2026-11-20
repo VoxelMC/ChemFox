@@ -12,6 +12,7 @@
 
 #include <QAction>
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -658,6 +659,40 @@ TEST_CASE("preferences: importing styles and the default style") {
         tabs->setCurrentIndex(i);
         dlg.grab().save(QDir(snap).filePath(QString("prefs-%1.png").arg(i)));
     }
+}
+TEST_CASE("preferences: the recent files list") {
+    testApp();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    prefs::clearRecentFiles();
+    auto touch = [&](const QString& name) {
+        QFile f(tmp.filePath(name));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        return QFileInfo(f).absoluteFilePath();
+    };
+    const QString a = touch("a.cmfx"), b = touch("b.cmfx"), c = touch("c.cmfx");
+    prefs::addRecentFile(a);
+    prefs::addRecentFile(b);
+    prefs::addRecentFile(c);
+    CHECK(prefs::recentFiles() == QStringList{c, b, a});
+    CHECK(QSettings().value(prefs::kLastFile).toString() == c);
+    // Opening one again moves it to the top rather than listing it twice.
+    prefs::addRecentFile(a);
+    CHECK(prefs::recentFiles() == QStringList{a, c, b});
+    // A file that has gone is left out, and dropped from the saved list.
+    QFile::remove(c);
+    CHECK(prefs::recentFiles() == QStringList{a, b});
+    CHECK(QSettings().value(prefs::kRecentFiles).toStringList() == QStringList{a, b});
+    prefs::removeRecentFile(a);
+    CHECK(prefs::recentFiles() == QStringList{b});
+    // Never longer than kMaxRecent, keeping the newest.
+    for (int i = 0; i < prefs::kMaxRecent + 3; ++i) prefs::addRecentFile(touch(QString("n%1.cmfx").arg(i)));
+    const QStringList list = prefs::recentFiles();
+    CHECK(list.size() == prefs::kMaxRecent);
+    CHECK(list.first().endsWith(QString("n%1.cmfx").arg(prefs::kMaxRecent + 2)));
+    prefs::clearRecentFiles();
+    CHECK(prefs::recentFiles().isEmpty());
+    QSettings().remove(prefs::kLastFile);
 }
 TEST_CASE("keymap: keys for an action, shortest first, follow rebinding") {
     Keymap k;
