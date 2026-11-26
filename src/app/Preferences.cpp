@@ -52,6 +52,46 @@ QString startFolder() {
     return s.value("lastDir").toString();
 }
 
+// Windows and macOS file systems ignore case, so Mol.cmfx and mol.cmfx are one entry there.
+static bool samePath(const QString& a, const QString& b) {
+#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
+    return a.compare(b, Qt::CaseInsensitive) == 0;
+#else
+    return a == b;
+#endif
+}
+
+static QStringList without(QStringList list, const QString& path) {
+    list.removeIf([&](const QString& p) { return samePath(p, path); });
+    return list;
+}
+
+QStringList recentFiles() {
+    QSettings s;
+    const QStringList all = s.value(kRecentFiles).toStringList();
+    QStringList found;
+    for (const QString& p : all)
+        if (QFileInfo::exists(p) && without(found, p).size() == found.size()) found << p;
+    if (found != all) s.setValue(kRecentFiles, found);
+    return found;
+}
+
+void addRecentFile(const QString& path) {
+    const QString abs = QFileInfo(path).absoluteFilePath();
+    QSettings s;
+    QStringList list = without(s.value(kRecentFiles).toStringList(), abs);
+    list.prepend(abs);
+    s.setValue(kRecentFiles, list.mid(0, kMaxRecent));
+    s.setValue(kLastFile, abs);
+}
+
+void removeRecentFile(const QString& path) {
+    QSettings s;
+    s.setValue(kRecentFiles, without(s.value(kRecentFiles).toStringList(), QFileInfo(path).absoluteFilePath()));
+}
+
+void clearRecentFiles() { QSettings().remove(kRecentFiles); }
+
 QString importStyle(const QString& file, bool overwrite, QString* error) {
     QFile in(file);
     if (!in.open(QIODevice::ReadOnly)) {

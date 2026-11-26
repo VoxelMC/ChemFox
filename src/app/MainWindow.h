@@ -45,6 +45,8 @@ private:
     void buildDocks();
     void newDocument();
     void open();
+    void openRecent(const QString& path);
+    void updateRecentMenu();  // File → Open Recent, from the saved list
     bool save();
     bool saveAs();
     void importStructure();
@@ -77,6 +79,7 @@ private:
     QAction* gridAction_ = nullptr;
     QAction* snapGridAction_ = nullptr;
     QAction* exportDefaultAction_ = nullptr;
+    QMenu* recentMenu_ = nullptr;
     QTimer autosave_;
     QString recoveryPath_;
     std::unique_ptr<QLockFile> recoveryLock_;  // held while this window runs, so another ChemFox won't take our copy
