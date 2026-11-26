@@ -10,6 +10,16 @@ in the form `## [x.y.z] - yyyy-mm-dd`.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-26
+
+### Added
+- File → Open Recent: the last ten documents opened or saved, newest first, with their folders so files of the same
+  name are easy to tell apart. Moved or deleted files drop off the list, and Clear Menu empties it (#15).
+
+### Fixed
+- On macOS, ChemFox's icon was about 15% bigger than other apps' in the Dock and Finder. It now sits on Apple's icon
+  grid, and the running app keeps that icon in the Dock instead of swapping in the Windows one.
+
 ## [0.3.0] - 2026-11-10
 
 ### Added

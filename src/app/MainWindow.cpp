@@ -215,6 +215,15 @@ void MainWindow::buildMenus() {
     auto* file = menuBar()->addMenu("&File");
     file->addAction("&New", QKeySequence::New, this, &MainWindow::newDocument);
     file->addAction("&Open…", QKeySequence::Open, this, &MainWindow::open);
+    // Open Recent is filled in each time File opens, so every window shows the same list. Only Clear Menu is a
+    // fixed action (and so the only one the shortcut registry sees); the file entries come and go around it.
+    recentMenu_ = file->addMenu("Open &Recent");
+    recentMenu_->addSeparator();
+    recentMenu_->addAction("&Clear Menu", this, [this] {
+        prefs::clearRecentFiles();
+        updateRecentMenu();
+    });
+    connect(file, &QMenu::aboutToShow, this, &MainWindow::updateRecentMenu);
     file->addAction("&Save", QKeySequence::Save, this, &MainWindow::save);
     file->addAction("Save &As…", QKeySequence::SaveAs, this, &MainWindow::saveAs);
     file->addSeparator();
@@ -793,7 +802,7 @@ bool MainWindow::openPath(const QString& path) {
     }
     canvas_->setDocument(*d);
     path_ = lower.endsWith(".svg") ? QString() : path;
-    if (!path_.isEmpty()) QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
+    if (!path_.isEmpty()) prefs::addRecentFile(path_);
     updateTitle();
     syncStyleUi();
     return true;
@@ -811,6 +820,41 @@ void MainWindow::open() {
     openPath(path);
 }
 
+void MainWindow::updateRecentMenu() {
+    if (!recentMenu_) return;
+    for (QAction* a : recentMenu_->actions())
+        if (a->data().isValid()) delete a;
+    const QStringList files = prefs::recentFiles();
+    QAction* before = recentMenu_->actions().value(0);  // the separator above Clear Menu
+    for (int i = 0; i < files.size(); ++i) {
+        const QFileInfo fi(files[i]);
+        // Numbered for the keyboard; the folder tells apart files with the same name.
+        QString name = fi.fileName().replace("&", "&&");
+        QString text = i < 9 ? QString("&%1  %2").arg(i + 1).arg(name) : QString("%1  %2").arg(i + 1).arg(name);
+        auto* a = new QAction(text + "  —  " + QDir::toNativeSeparators(fi.absolutePath()).replace("&", "&&"), recentMenu_);
+        a->setData(files[i]);
+        a->setStatusTip(QDir::toNativeSeparators(files[i]));
+        connect(a, &QAction::triggered, this, [this, path = files[i]] { openRecent(path); });
+        recentMenu_->insertAction(before, a);
+    }
+    recentMenu_->setEnabled(!files.isEmpty());
+}
+
+void MainWindow::openRecent(const QString& path) {
+    if (!QFileInfo::exists(path)) {
+        QMessageBox::information(this, "Open Recent", QDir::toNativeSeparators(path) + "\nisn't there any more, so it has been "
+                                                      "taken off the list.");
+        prefs::removeRecentFile(path);
+        updateRecentMenu();
+        return;
+    }
+    if (!maybeSave()) return;
+    if (!openPath(path)) {
+        prefs::removeRecentFile(path);
+        updateRecentMenu();
+    }
+}
+
 bool MainWindow::save() {
     if (path_.isEmpty()) return saveAs();
     QString err;
@@ -819,7 +863,7 @@ bool MainWindow::save() {
         return false;
     }
     canvas_->undoStack()->setClean();
-    QSettings().setValue(prefs::kLastFile, QFileInfo(path_).absoluteFilePath());
+    prefs::addRecentFile(path_);
     statusBar()->showMessage("Saved " + path_);
     return true;
 }

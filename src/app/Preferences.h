@@ -10,6 +10,7 @@
 
 #include <QDialog>
 #include <QString>
+#include <QStringList>
 #include <functional>
 
 class QCheckBox;
@@ -25,6 +26,7 @@ namespace prefs {
 inline const char* kDefaultStyle = "prefs/defaultStyle";   // QString, "default"
 inline const char* kReopenLast = "prefs/reopenLast";       // bool, false
 inline const char* kLastFile = "prefs/lastFile";           // QString: the last file opened or saved
+inline const char* kRecentFiles = "prefs/recentFiles";     // QStringList, newest first (File → Open Recent)
 inline const char* kAutoUpdate = "updates/auto";           // bool, true
 inline const char* kSteerToMouse = "prefs/steerToMouse";   // bool, true
 inline const char* kWheelPans = "prefs/wheelPans";         // bool, false (Ctrl+wheel then zooms)
@@ -49,6 +51,15 @@ QString startFolder();
 // Copy a .style file into the user style folder. Returns the style's name, or empty with *error set.
 // An existing file of the same name is only replaced when overwrite is true.
 QString importStyle(const QString& file, bool overwrite, QString* error);
+
+// File → Open Recent, newest first and at most kMaxRecent long.
+inline constexpr int kMaxRecent = 10;
+// Files that are gone are left out (and dropped from the list).
+QStringList recentFiles();
+// Moves a file opened or saved to the top of the list, and makes it the last file.
+void addRecentFile(const QString& path);
+void removeRecentFile(const QString& path);
+void clearRecentFiles();
 }  // namespace prefs
 
 class PreferencesDialog : public QDialog {
